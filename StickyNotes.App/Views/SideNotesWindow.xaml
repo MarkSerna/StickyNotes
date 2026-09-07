@@ -62,6 +62,7 @@
             <Grid Grid.Column="1" Margin="8,8,6,8">
                 <!-- TARJETA ESTILO STICKY NOTE IDÉNTICA AL MODO FLOTANTE -->
                 <Grid x:Name="ActiveNoteCard"
+                      RequestedTheme="Light"
                       CornerRadius="12"
                       BorderThickness="1"
                       BorderBrush="#00000020"
@@ -91,7 +92,18 @@
                                  FontSize="12"
                                  VerticalAlignment="Center"
                                  TextWrapping="NoWrap"
-                                 TextChanged="TxtActiveNoteTitle_TextChanged"/>
+                                 TextChanged="TxtActiveNoteTitle_TextChanged">
+                            <TextBox.Resources>
+                                <SolidColorBrush x:Key="TextControlBackground" Color="Transparent"/>
+                                <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent"/>
+                                <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent"/>
+                                <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="Transparent"/>
+                                <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent"/>
+                                <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent"/>
+                                <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent"/>
+                                <SolidColorBrush x:Key="TextControlBorderBrushDisabled" Color="Transparent"/>
+                            </TextBox.Resources>
+                        </TextBox>
 
                         <!-- Acciones: Sync, Opciones y Papelera -->
                         <StackPanel Grid.Column="1" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
@@ -173,7 +185,18 @@
                                  AcceptsReturn="True"
                                  FontSize="13"
                                  FontFamily="Segoe UI Variable Text, Segoe UI"
-                                 TextChanged="ActiveNoteEditor_TextChanged"/>
+                                 TextChanged="ActiveNoteEditor_TextChanged">
+                        <RichEditBox.Resources>
+                            <SolidColorBrush x:Key="TextControlBackground" Color="Transparent"/>
+                            <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent"/>
+                            <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent"/>
+                            <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="Transparent"/>
+                            <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent"/>
+                            <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent"/>
+                            <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent"/>
+                            <SolidColorBrush x:Key="TextControlBorderBrushDisabled" Color="Transparent"/>
+                        </RichEditBox.Resources>
+                    </RichEditBox>
 
                     <!-- Pie: Barra de Formato y Auto-guardado -->
                     <Grid x:Name="ActiveNoteFooter" Grid.Row="2" Padding="8,2" BorderThickness="0,1,0,0">

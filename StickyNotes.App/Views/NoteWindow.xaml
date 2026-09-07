@@ -8,7 +8,7 @@
     mc:Ignorable="d"
     Title="Nota Rápida">
 
-    <Grid x:Name="RootGrid" CornerRadius="12" BorderThickness="1">
+    <Grid x:Name="RootGrid" RequestedTheme="Light" CornerRadius="12" BorderThickness="1">
         <Grid.RowDefinitions>
             <!-- Cabecera de la nota (arrastre y controles) -->
             <RowDefinition Height="36"/>
@@ -58,7 +58,18 @@
                      VerticalAlignment="Center"
                      Margin="4,0"
                      TextWrapping="NoWrap"
-                     TextChanged="TxtTitle_TextChanged"/>
+                     TextChanged="TxtTitle_TextChanged">
+                <TextBox.Resources>
+                    <SolidColorBrush x:Key="TextControlBackground" Color="Transparent"/>
+                    <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent"/>
+                    <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent"/>
+                    <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="Transparent"/>
+                    <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent"/>
+                    <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent"/>
+                    <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent"/>
+                    <SolidColorBrush x:Key="TextControlBorderBrushDisabled" Color="Transparent"/>
+                </TextBox.Resources>
+            </TextBox>
 
             <!-- Acciones derechas: Sincronización, Paleta y Eliminar -->
             <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2" VerticalAlignment="Center">
@@ -110,7 +121,18 @@
                      AcceptsReturn="True"
                      FontSize="13"
                      FontFamily="Segoe UI Variable Text, Segoe UI"
-                     TextChanged="EditorBox_TextChanged"/>
+                     TextChanged="EditorBox_TextChanged">
+            <RichEditBox.Resources>
+                <SolidColorBrush x:Key="TextControlBackground" Color="Transparent"/>
+                <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent"/>
+                <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent"/>
+                <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="Transparent"/>
+                <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent"/>
+                <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent"/>
+                <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent"/>
+                <SolidColorBrush x:Key="TextControlBorderBrushDisabled" Color="Transparent"/>
+            </RichEditBox.Resources>
+        </RichEditBox>
 
         <!-- BARRA INFERIOR: FORMATO Y AUTO-GUARDADO -->
         <Grid x:Name="FooterBar" Grid.Row="2" Padding="8,2" BorderThickness="0,1,0,0">

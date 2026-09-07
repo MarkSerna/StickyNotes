@@ -127,11 +127,19 @@ public sealed partial class NoteWindow : Window
         try
         {
             var sel = EditorBox.Document.Selection;
-            sel.SetRange(0, 0);
-            sel.Expand(TextRangeUnit.Story);
-            sel.CharacterFormat.BackgroundColor = ((Microsoft.UI.Xaml.Media.SolidColorBrush)palette.BodyBrush).Color;
-            sel.CharacterFormat.ForegroundColor = ((Microsoft.UI.Xaml.Media.SolidColorBrush)palette.ForegroundBrush).Color;
-            sel.SetRange(0, 0);
+            EditorBox.Document.GetText(TextGetOptions.None, out var allText);
+            if (!string.IsNullOrEmpty(allText))
+            {
+                sel.SetRange(0, allText.Length);
+                sel.CharacterFormat.ForegroundColor = ((SolidColorBrush)palette.ForegroundBrush).Color;
+                sel.CharacterFormat.BackgroundColor = Colors.Transparent;
+                sel.SetRange(allText.Length, allText.Length);
+            }
+            else
+            {
+                sel.CharacterFormat.ForegroundColor = ((SolidColorBrush)palette.ForegroundBrush).Color;
+                sel.CharacterFormat.BackgroundColor = Colors.Transparent;
+            }
         }
         catch
         {

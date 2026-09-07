@@ -10,6 +10,7 @@ using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Input;
+using Microsoft.UI.Xaml.Media;
 using StickyNotes.App.Helpers;
 using ColorHelper = StickyNotes.App.Helpers.ColorHelper;
 using StickyNotes.Core.Enums;
@@ -220,7 +221,27 @@ public sealed partial class SideNotesWindow : Window
 
         TxtActiveNoteTitle.Foreground = palette.ForegroundBrush;
         ActiveNoteEditor.Foreground = palette.ForegroundBrush;
+        ActiveNoteEditor.Background = palette.BodyBrush;
         TxtActiveAutoSave.Foreground = palette.ForegroundBrush;
+
+        try
+        {
+            var sel = ActiveNoteEditor.Document.Selection;
+            ActiveNoteEditor.Document.GetText(TextGetOptions.None, out var allText);
+            if (!string.IsNullOrEmpty(allText))
+            {
+                sel.SetRange(0, allText.Length);
+                sel.CharacterFormat.ForegroundColor = ((SolidColorBrush)palette.ForegroundBrush).Color;
+                sel.CharacterFormat.BackgroundColor = Colors.Transparent;
+                sel.SetRange(allText.Length, allText.Length);
+            }
+            else
+            {
+                sel.CharacterFormat.ForegroundColor = ((SolidColorBrush)palette.ForegroundBrush).Color;
+                sel.CharacterFormat.BackgroundColor = Colors.Transparent;
+            }
+        }
+        catch { }
 
         IconActiveSync.Foreground = palette.ForegroundBrush;
         IconActiveMore.Foreground = palette.ForegroundBrush;
