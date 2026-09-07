@@ -233,9 +233,11 @@
                             </Button>
                         </StackPanel>
 
+                        <!-- Leyenda de auto-guardado (oculta) -->
                         <TextBlock x:Name="TxtActiveAutoSave"
                                    Grid.Column="1"
                                    Text="Auto-guardado 500ms"
+                                   Visibility="Collapsed"
                                    FontSize="10"
                                    Opacity="0.65"
                                    VerticalAlignment="Center"

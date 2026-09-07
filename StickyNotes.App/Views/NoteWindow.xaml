@@ -160,10 +160,11 @@
                 </Button>
             </StackPanel>
 
-            <!-- Leyenda sutil de Auto-guardado -->
+            <!-- Leyenda sutil de Auto-guardado (oculta) -->
             <TextBlock x:Name="TxtAutoSave"
                        Grid.Column="1"
                        Text="Auto-guardado 500ms"
+                       Visibility="Collapsed"
                        FontSize="10"
                        Opacity="0.65"
                        VerticalAlignment="Center"

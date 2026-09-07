@@ -466,9 +466,6 @@ export const InteractiveStickyNotesSimulator: React.FC = () => {
                         <CheckSquare className="w-3.5 h-3.5" />
                       </button>
                     </div>
-                    <span className="text-[10px] opacity-60">
-                      Auto-guardado 500ms
-                    </span>
                   </div>
                 </div>
               );
@@ -725,9 +722,6 @@ export const InteractiveStickyNotesSimulator: React.FC = () => {
                             <CheckSquare className="w-3.5 h-3.5" />
                           </button>
                         </div>
-                        <span className="text-[10px] opacity-70">
-                          Auto-guardado 500ms
-                        </span>
                       </div>
                     </div>
                   );
