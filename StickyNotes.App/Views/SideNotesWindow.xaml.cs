@@ -62,6 +62,14 @@ public sealed partial class SideNotesWindow : Window
     private double _animDurationMs;
     private readonly System.Diagnostics.Stopwatch _animStopwatch = new();
 
+    private double _userManualHeight = 0;
+    private readonly TextBlock _measureBlock = new()
+    {
+        FontSize = 13,
+        FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Segoe UI Variable Text, Segoe UI"),
+        TextWrapping = TextWrapping.Wrap
+    };
+
     private readonly List<Note> _allLoadedNotes = new();
     public ObservableCollection<Note> Notes { get; } = new();
 
@@ -374,10 +382,9 @@ public sealed partial class SideNotesWindow : Window
 
             ApplyActiveNoteColor(selectedNote.Color);
 
-            // Graduar tamaño vertical predeterminado
-            var targetHeight = selectedNote.Height > 100 ? selectedNote.Height : 340.0;
-            ActiveNoteCard.VerticalAlignment = VerticalAlignment.Top;
-            ActiveNoteCard.Height = Math.Min(targetHeight, Math.Max(260, ExpandedPanel.ActualHeight > 200 ? ExpandedPanel.ActualHeight - 24 : 700));
+            // Graduar y auto-ajustar altura dinámica según el contenido de la nota
+            _userManualHeight = selectedNote.Height > 180 ? selectedNote.Height : 0;
+            AutoFitNoteHeight();
 
             // Estado de sincronización
             IconActiveSync.Glyph = selectedNote.SyncStatus == SyncStatus.Synced ? "\uE753" : "\uE898";
@@ -726,8 +733,68 @@ public sealed partial class SideNotesWindow : Window
     private void ActiveNoteEditor_TextChanged(object sender, RoutedEventArgs e)
     {
         if (_currentNote == null || _isTrashMode) return;
+
+        // Auto-extender o contraer la altura de la tarjeta de nota poco a poco conforme el usuario escribe
+        AutoFitNoteHeight();
+
         _debounceTimer.Stop();
         _debounceTimer.Start();
+    }
+
+    private void AutoFitNoteHeight()
+    {
+        if (_currentNote == null || _isTrashMode) return;
+
+        // Si la nota fue fijada a pantalla completa (Stretch), no sobreescribir con altura fija
+        if (ActiveNoteCard.VerticalAlignment == VerticalAlignment.Stretch)
+        {
+            return;
+        }
+
+        ActiveNoteEditor.Document.GetText(TextGetOptions.None, out var text);
+
+        // Ancho útil para el texto (ancho del editor menos márgenes internos)
+        var editorWidth = ActiveNoteEditor.ActualWidth > 80 ? ActiveNoteEditor.ActualWidth - 20 : 270.0;
+
+        var textToMeasure = string.IsNullOrEmpty(text) ? " " : text;
+        // Si termina en salto de línea, asegurar que el cursor en la nueva línea sea contabilizado
+        if (textToMeasure.EndsWith('\r') || textToMeasure.EndsWith('\n'))
+        {
+            textToMeasure += "\u200B";
+        }
+
+        _measureBlock.Width = editorWidth;
+        _measureBlock.Text = textToMeasure;
+        _measureBlock.Measure(new Windows.Foundation.Size(editorWidth, double.PositiveInfinity));
+        var textHeight = _measureBlock.DesiredSize.Height;
+
+        // Altura acumulada de elementos fijos:
+        // Cabecera (38px) + Barra inferior (34px) + Grip inferior (12px) + Márgenes y padding (22px) = 106px
+        var totalNeeded = textHeight + 106.0;
+
+        // Altura máxima disponible en el panel lateral sin desbordar la pantalla
+        var availableMax = ExpandedPanel.ActualHeight > 200 
+            ? Math.Max(260.0, ExpandedPanel.ActualHeight - 32.0) 
+            : 850.0;
+
+        // Si el usuario configuró una altura base manual superior, respetarla como base mínima
+        var minHeight = _userManualHeight > 180 ? _userManualHeight : 240.0;
+
+        var targetHeight = Math.Clamp(totalNeeded, minHeight, availableMax);
+
+        ActiveNoteCard.VerticalAlignment = VerticalAlignment.Top;
+        ActiveNoteCard.Height = targetHeight;
+        _currentNote.Height = targetHeight;
+
+        // Si se llegó al tope máximo disponible en pantalla, mantener visible el cursor
+        if (targetHeight >= availableMax)
+        {
+            try
+            {
+                ActiveNoteEditor.Document.Selection.ScrollIntoView(PointOptions.None);
+            }
+            catch { }
+        }
     }
 
     private async void DebounceTimer_Tick(object? sender, object e)
@@ -738,6 +805,7 @@ public sealed partial class SideNotesWindow : Window
         _currentNote.Title = string.IsNullOrWhiteSpace(TxtActiveNoteTitle.Text) ? null : TxtActiveNoteTitle.Text.Trim();
         ActiveNoteEditor.Document.GetText(TextGetOptions.FormatRtf, out var rtf);
         _currentNote.Content = rtf;
+        _currentNote.Height = ActiveNoteCard.Height;
 
         await _repository.UpdateAsync(_currentNote);
         // Nota: Al implementar INotifyPropertyChanged en Note, los cambios de título y
@@ -820,9 +888,10 @@ public sealed partial class SideNotesWindow : Window
 
         var newNote = new Note
         {
-            Title = "Nueva nota",
+            Title = null,
             Content = string.Empty,
-            Color = NoteColor.Yellow
+            Color = NoteColor.Yellow,
+            Height = 240.0
         };
 
         var created = await _repository.CreateAsync(newNote);
@@ -830,6 +899,10 @@ public sealed partial class SideNotesWindow : Window
         Notes.Insert(0, created);
         UpdatePeekingPills();
         NotesTabList.SelectedIndex = 0;
+
+        _userManualHeight = 0;
+        AutoFitNoteHeight();
+        ActiveNoteEditor.Focus(FocusState.Programmatic);
     }
 
     private async void BtnSettings_Click(object sender, RoutedEventArgs e)
@@ -902,6 +975,7 @@ public sealed partial class SideNotesWindow : Window
         var maxHeight = Math.Max(260, ExpandedPanel.ActualHeight > 200 ? ExpandedPanel.ActualHeight - 24 : 800);
         var newHeight = Math.Clamp(_resizeStartHeight + deltaY, 180, maxHeight);
 
+        _userManualHeight = newHeight;
         ActiveNoteCard.VerticalAlignment = VerticalAlignment.Top;
         ActiveNoteCard.Height = newHeight;
         if (_currentNote != null)
@@ -934,15 +1008,18 @@ public sealed partial class SideNotesWindow : Window
             if (targetSize <= 0)
             {
                 // Pantalla completa
+                _userManualHeight = 0;
                 ActiveNoteCard.VerticalAlignment = VerticalAlignment.Stretch;
                 ActiveNoteCard.Height = double.NaN;
                 _currentNote.Height = Math.Max(600, ExpandedPanel.ActualHeight - 24);
             }
             else
             {
+                _userManualHeight = targetSize;
                 ActiveNoteCard.VerticalAlignment = VerticalAlignment.Top;
                 ActiveNoteCard.Height = targetSize;
                 _currentNote.Height = targetSize;
+                AutoFitNoteHeight();
             }
 
             await _repository.UpdateAsync(_currentNote);

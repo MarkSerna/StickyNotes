@@ -68,7 +68,7 @@
             </Border>
 
             <!-- COLUMNA PRINCIPAL: EDITOR DE LA NOTA SELECCIONADA -->
-            <Grid x:Name="ActiveNoteContainer" Grid.Column="1" Margin="8,8,6,8">
+            <Grid x:Name="ActiveNoteContainer" Grid.Column="1" Margin="10,14,8,14">
                 <!-- TARJETA ESTILO STICKY NOTE IDÉNTICA AL MODO FLOTANTE -->
                 <Grid x:Name="ActiveNoteCard"
                       RequestedTheme="Light"
@@ -76,30 +76,32 @@
                       BorderThickness="1"
                       BorderBrush="#00000020"
                       VerticalAlignment="Top"
-                      Height="340">
+                      Height="240">
                     <Grid.RowDefinitions>
-                        <RowDefinition Height="36"/>
+                        <RowDefinition Height="38"/>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="34"/>
                         <RowDefinition Height="12"/>
                     </Grid.RowDefinitions>
 
-                    <!-- Cabecera de la Nota en el Panel Lateral -->
-                    <Grid x:Name="NoteHeaderBar" Grid.Row="0" Padding="8,2">
-                        <Grid.ColumnDefinitions>
-                            <ColumnDefinition Width="*"/>
-                            <ColumnDefinition Width="Auto"/>
-                        </Grid.ColumnDefinitions>
+                    <!-- Cabecera de la Nota en el Panel Lateral con bordes redondeados superiores -->
+                    <Border x:Name="NoteHeaderBar" Grid.Row="0" CornerRadius="11,11,0,0" Padding="10,2">
+                        <Grid>
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="*"/>
+                                <ColumnDefinition Width="Auto"/>
+                            </Grid.ColumnDefinitions>
 
-                        <!-- Título Editable -->
-                        <TextBox x:Name="TxtActiveNoteTitle"
-                                 Grid.Column="0"
-                                 PlaceholderText="Título de la nota..."
-                                 Background="Transparent"
-                                 BorderThickness="0"
-                                 FontWeight="Bold"
-                                 FontSize="12"
-                                 VerticalAlignment="Center"
+                            <!-- Título Editable -->
+                            <TextBox x:Name="TxtActiveNoteTitle"
+                                     Grid.Column="0"
+                                     PlaceholderText="Título de la nota..."
+                                     Background="Transparent"
+                                     BorderThickness="0"
+                                     FontWeight="Bold"
+                                     FontSize="12"
+                                     VerticalAlignment="Center"
+                                     Margin="0,0,4,0"
                                  TextWrapping="NoWrap"
                                  TextChanged="TxtActiveNoteTitle_TextChanged">
                             <TextBox.Resources>
@@ -183,32 +185,36 @@
                             </Button>
                         </StackPanel>
                     </Grid>
+                </Border>
 
-                    <!-- Cuerpo: Editor de Texto -->
-                    <RichEditBox x:Name="ActiveNoteEditor"
-                                 Grid.Row="1"
-                                 Margin="10,4,10,4"
-                                 BorderThickness="0"
-                                 Background="Transparent"
-                                 TextWrapping="Wrap"
-                                 AcceptsReturn="True"
-                                 FontSize="13"
-                                 FontFamily="Segoe UI Variable Text, Segoe UI"
-                                 TextChanged="ActiveNoteEditor_TextChanged">
-                        <RichEditBox.Resources>
-                            <SolidColorBrush x:Key="TextControlBackground" Color="Transparent"/>
-                            <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent"/>
-                            <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent"/>
-                            <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="Transparent"/>
-                            <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent"/>
-                            <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent"/>
-                            <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent"/>
-                            <SolidColorBrush x:Key="TextControlBorderBrushDisabled" Color="Transparent"/>
-                        </RichEditBox.Resources>
-                    </RichEditBox>
+                <!-- Cuerpo: Editor de Texto -->
+                <RichEditBox x:Name="ActiveNoteEditor"
+                             Grid.Row="1"
+                             Margin="10,4,10,4"
+                             BorderThickness="0"
+                             Background="Transparent"
+                             TextWrapping="Wrap"
+                             AcceptsReturn="True"
+                             FontSize="13"
+                             FontFamily="Segoe UI Variable Text, Segoe UI"
+                             ScrollViewer.VerticalScrollBarVisibility="Auto"
+                             ScrollViewer.HorizontalScrollBarVisibility="Disabled"
+                             TextChanged="ActiveNoteEditor_TextChanged">
+                    <RichEditBox.Resources>
+                        <SolidColorBrush x:Key="TextControlBackground" Color="Transparent"/>
+                        <SolidColorBrush x:Key="TextControlBackgroundPointerOver" Color="Transparent"/>
+                        <SolidColorBrush x:Key="TextControlBackgroundFocused" Color="Transparent"/>
+                        <SolidColorBrush x:Key="TextControlBackgroundDisabled" Color="Transparent"/>
+                        <SolidColorBrush x:Key="TextControlBorderBrush" Color="Transparent"/>
+                        <SolidColorBrush x:Key="TextControlBorderBrushPointerOver" Color="Transparent"/>
+                        <SolidColorBrush x:Key="TextControlBorderBrushFocused" Color="Transparent"/>
+                        <SolidColorBrush x:Key="TextControlBorderBrushDisabled" Color="Transparent"/>
+                    </RichEditBox.Resources>
+                </RichEditBox>
 
-                    <!-- Pie: Barra de Formato y Auto-guardado -->
-                    <Grid x:Name="ActiveNoteFooter" Grid.Row="2" Padding="8,2" BorderThickness="0,1,0,0">
+                <!-- Pie: Barra de Formato y Auto-guardado -->
+                <Border x:Name="ActiveNoteFooter" Grid.Row="2" Padding="8,2" BorderThickness="0,1,0,0">
+                    <Grid>
                         <Grid.ColumnDefinitions>
                             <ColumnDefinition Width="*"/>
                             <ColumnDefinition Width="Auto"/>
@@ -243,6 +249,7 @@
                                    VerticalAlignment="Center"
                                    Margin="0,0,6,0"/>
                     </Grid>
+                </Border>
 
                     <!-- Manija de redimensionamiento para graduar el tamaño vertical de la nota -->
                     <Border x:Name="ResizeGrip"
