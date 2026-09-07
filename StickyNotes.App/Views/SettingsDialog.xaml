@@ -26,12 +26,24 @@
 
         <!-- Credenciales OAuth -->
         <StackPanel Spacing="10">
-            <TextBlock Text="Credenciales de Google Cloud Console" FontWeight="SemiBold" FontSize="12"/>
+            <Grid ColumnDefinitions="*,Auto">
+                <TextBlock Text="Credenciales de Google Cloud Console" FontWeight="SemiBold" FontSize="12" VerticalAlignment="Center"/>
+                <Button x:Name="BtnImportJson" Grid.Column="1" Click="BtnImportJson_Click" FontSize="11" Padding="8,4" ToolTipService.ToolTip="Carga tu archivo client_secret_xxxx.json descargado">
+                    <StackPanel Orientation="Horizontal" Spacing="6">
+                        <FontIcon Glyph="&#xE8B7;" FontSize="12"/>
+                        <TextBlock Text="Importar JSON"/>
+                    </StackPanel>
+                </Button>
+            </Grid>
 
             <TextBox x:Name="TxtClientId" Header="ID de cliente (Client ID)" PlaceholderText="xxxx.apps.googleusercontent.com" FontSize="12"/>
             <PasswordBox x:Name="TxtClientSecret" Header="Secreto de cliente (Client Secret)" PlaceholderText="GOCSPX-xxxx" FontSize="12"/>
 
-            <TextBlock Text="• Scope restringido: drive.appdata (carpeta oculta propia, sin acceso a tus fotos ni documentos personales)." FontSize="10.5" Foreground="{ThemeResource AppSecondaryTextBrush}" TextWrapping="Wrap"/>
+            <StackPanel Spacing="4">
+                <TextBlock Text="• Tipo de cliente requerido: Aplicación de escritorio (Desktop App)." FontSize="10.5" Foreground="{ThemeResource AppSecondaryTextBrush}" TextWrapping="Wrap"/>
+                <TextBlock Text="• Scope restringido: drive.appdata (carpeta oculta propia, sin acceso a tus fotos ni documentos personales)." FontSize="10.5" Foreground="{ThemeResource AppSecondaryTextBrush}" TextWrapping="Wrap"/>
+                <HyperlinkButton Content="Abrir Google Cloud Console (Credenciales)" NavigateUri="https://console.cloud.google.com/apis/credentials" FontSize="11" Padding="0"/>
+            </StackPanel>
         </StackPanel>
 
         <!-- Mensaje de estado -->

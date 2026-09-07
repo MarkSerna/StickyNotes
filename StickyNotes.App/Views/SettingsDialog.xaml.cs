@@ -6,6 +6,8 @@ using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media;
 using StickyNotes.Sync.Services;
+using Windows.Storage.Pickers;
+using WinRT.Interop;
 
 namespace StickyNotes.App.Views;
 
@@ -13,12 +15,14 @@ public sealed partial class SettingsDialog : ContentDialog
 {
     private readonly GoogleDriveSyncService _syncService;
     private readonly SyncScheduler _syncScheduler;
+    private readonly IntPtr _windowHandle;
 
-    public SettingsDialog(GoogleDriveSyncService syncService, SyncScheduler syncScheduler)
+    public SettingsDialog(GoogleDriveSyncService syncService, SyncScheduler syncScheduler, IntPtr windowHandle = default)
     {
         InitializeComponent();
         _syncService = syncService;
         _syncScheduler = syncScheduler;
+        _windowHandle = windowHandle;
 
         TxtClientId.Text = _syncService.ClientId ?? string.Empty;
         TxtClientSecret.Password = _syncService.ClientSecret ?? string.Empty;
@@ -47,14 +51,68 @@ public sealed partial class SettingsDialog : ContentDialog
         }
     }
 
+    private async void BtnImportJson_Click(object sender, RoutedEventArgs e)
+    {
+        try
+        {
+            var picker = new FileOpenPicker();
+            picker.SuggestedStartLocation = PickerLocationId.Downloads;
+            picker.FileTypeFilter.Add(".json");
+
+            var hWnd = _windowHandle != IntPtr.Zero ? _windowHandle : System.Diagnostics.Process.GetCurrentProcess().MainWindowHandle;
+            InitializeWithWindow.Initialize(picker, hWnd);
+
+            var file = await picker.PickSingleFileAsync();
+            if (file == null) return;
+
+            var jsonText = await Windows.Storage.FileIO.ReadTextAsync(file);
+            using var doc = JsonDocument.Parse(jsonText);
+            var root = doc.RootElement;
+
+            JsonElement section = default;
+            if (root.TryGetProperty("installed", out var installedSec))
+            {
+                section = installedSec;
+            }
+            else if (root.TryGetProperty("web", out var webSec))
+            {
+                section = webSec;
+            }
+
+            if (section.ValueKind == JsonValueKind.Object &&
+                section.TryGetProperty("client_id", out var cidProp) &&
+                section.TryGetProperty("client_secret", out var csecProp))
+            {
+                var cid = cidProp.GetString() ?? string.Empty;
+                var csec = csecProp.GetString() ?? string.Empty;
+
+                TxtClientId.Text = cid;
+                TxtClientSecret.Password = csec;
+
+                _syncService.UpdateCredentials(cid, csec);
+                PersistCredentialsLocally(cid, csec);
+
+                ShowMessage("¡Credenciales cargadas con éxito! Haz clic en 'Conectar' para autorizar tu cuenta.", false);
+            }
+            else
+            {
+                ShowMessage("El archivo JSON no contiene credenciales válidas de Google OAuth (debe contener 'installed' o 'web').", true);
+            }
+        }
+        catch (Exception ex)
+        {
+            ShowMessage($"Error al importar el archivo JSON: {ex.Message}", true);
+        }
+    }
+
     private async void BtnConnectToggle_Click(object sender, RoutedEventArgs e)
     {
         var clientId = TxtClientId.Text.Trim();
         var clientSecret = TxtClientSecret.Password.Trim();
 
-        if (string.IsNullOrWhiteSpace(clientId) || string.IsNullOrWhiteSpace(clientSecret))
+        if (string.IsNullOrWhiteSpace(clientId) || clientId.Contains("TU_CLIENT_ID") || string.IsNullOrWhiteSpace(clientSecret))
         {
-            ShowMessage("Por favor ingresa un Client ID y Client Secret válidos de Google Cloud.", true);
+            ShowMessage("Por favor ingresa un Client ID y Client Secret válidos de Google Cloud o pulsa 'Importar JSON'.", true);
             return;
         }
 
@@ -67,7 +125,8 @@ public sealed partial class SettingsDialog : ContentDialog
         else
         {
             _syncService.UpdateCredentials(clientId, clientSecret);
-            ShowMessage("Iniciando navegador para autorizar cuenta de Google...", false);
+            PersistCredentialsLocally(clientId, clientSecret);
+            ShowMessage("Abriendo navegador para iniciar sesión con Google...", false);
             BtnConnectToggle.IsEnabled = false;
 
             var ok = await _syncService.AuthenticateAsync();
@@ -77,12 +136,11 @@ public sealed partial class SettingsDialog : ContentDialog
             {
                 UpdateUiState();
                 ShowMessage("¡Conectado exitosamente con Google Drive!", false);
-                // Disparar sincronización inmediata inicial
                 _ = _syncScheduler.RequestImmediateSyncAsync();
             }
             else
             {
-                ShowMessage("No se pudo completar la autenticación. Revisa tus credenciales.", true);
+                ShowMessage("No se pudo completar la autenticación. Verifica que tu correo esté añadido como usuario de prueba en Google Cloud si la app está en modo Testing.", true);
             }
         }
     }
@@ -100,31 +158,24 @@ public sealed partial class SettingsDialog : ContentDialog
     {
         try
         {
-            var appSettingsPath = Path.Combine(AppContext.BaseDirectory, "appsettings.json");
-            if (File.Exists(appSettingsPath))
+            var localSettingsPath = Path.Combine(AppContext.BaseDirectory, "appsettings.local.json");
+            var settings = new
             {
-                var json = File.ReadAllText(appSettingsPath);
-                using var doc = JsonDocument.Parse(json);
-                var root = doc.RootElement;
-
-                // Crear o actualizar la estructura
-                var dict = JsonSerializer.Deserialize<System.Collections.Generic.Dictionary<string, object>>(json);
-                if (dict != null)
+                GoogleDrive = new
                 {
-                    dict["GoogleDrive"] = new
-                    {
-                        ClientId = clientId,
-                        ClientSecret = clientSecret
-                    };
-
-                    var updatedJson = JsonSerializer.Serialize(dict, new JsonSerializerOptions { WriteIndented = true });
-                    File.WriteAllText(appSettingsPath, updatedJson);
+                    ClientId = clientId,
+                    ClientSecret = clientSecret,
+                    ApplicationName = "StickyNotes Windows 11",
+                    Scopes = new[] { "https://www.googleapis.com/auth/drive.appdata" }
                 }
-            }
+            };
+
+            var updatedJson = JsonSerializer.Serialize(settings, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(localSettingsPath, updatedJson);
         }
         catch (Exception ex)
         {
-            System.Diagnostics.Debug.WriteLine($"[SettingsDialog] Error al persistir appsettings.json: {ex.Message}");
+            System.Diagnostics.Debug.WriteLine($"[SettingsDialog] Error al persistir appsettings.local.json: {ex.Message}");
         }
     }
 

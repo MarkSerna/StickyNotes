@@ -70,7 +70,7 @@ public class GoogleDriveSyncService
     /// </summary>
     public async Task<bool> AuthenticateAsync(CancellationToken cancellationToken = default)
     {
-        if (string.IsNullOrWhiteSpace(_clientId) || string.IsNullOrWhiteSpace(_clientSecret))
+        if (string.IsNullOrWhiteSpace(_clientId) || string.IsNullOrWhiteSpace(_clientSecret) || _clientId.Contains("TU_CLIENT_ID"))
         {
             AuthStatusChanged?.Invoke(false);
             return false;
@@ -103,8 +103,9 @@ public class GoogleDriveSyncService
             AuthStatusChanged?.Invoke(true);
             return true;
         }
-        catch (Exception)
+        catch (Exception ex)
         {
+            System.Diagnostics.Debug.WriteLine($"[GoogleDriveSync] Error en autenticación: {ex}");
             AuthStatusChanged?.Invoke(false);
             return false;
         }

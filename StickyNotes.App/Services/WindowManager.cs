@@ -184,7 +184,8 @@ public class WindowManager
         {
             _sideNotesWindow.Activate();
             var syncService = App.Services.GetRequiredService<GoogleDriveSyncService>();
-            var dialog = new SettingsDialog(syncService, _syncScheduler)
+            var hWnd = WinRT.Interop.WindowNative.GetWindowHandle(_sideNotesWindow);
+            var dialog = new SettingsDialog(syncService, _syncScheduler, hWnd)
             {
                 XamlRoot = _sideNotesWindow.Content.XamlRoot
             };

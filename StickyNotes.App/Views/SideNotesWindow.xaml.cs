@@ -529,7 +529,8 @@ public sealed partial class SideNotesWindow : Window
     {
         var syncService = App.Services.GetRequiredService<GoogleDriveSyncService>();
         var syncScheduler = App.Services.GetRequiredService<SyncScheduler>();
-        var dialog = new SettingsDialog(syncService, syncScheduler)
+        var hWnd = WindowNative.GetWindowHandle(this);
+        var dialog = new SettingsDialog(syncService, syncScheduler, hWnd)
         {
             XamlRoot = this.Content.XamlRoot
         };
