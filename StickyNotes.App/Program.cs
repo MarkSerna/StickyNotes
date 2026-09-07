@@ -25,34 +25,61 @@ public static class Program
     [STAThread]
     public static void Main(string[] args)
     {
-        // 1. Evitar múltiples instancias simultáneas mediante un Mutex con nombre
-        const string mutexName = "Global\\StickyNotes_Win11_SingleInstanceMutex";
-        _singleInstanceMutex = new Mutex(true, mutexName, out bool isOnlyInstance);
-
-        if (!isOnlyInstance)
+        var appDataDir = Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "StickyNotes");
+        Directory.CreateDirectory(appDataDir);
+        var logPath = Path.Combine(appDataDir, "startup.log");
+        try
         {
-            // Ya hay una instancia corriendo; salir para enfocar la existente
-            return;
+            File.WriteAllText(logPath, $"[{DateTime.UtcNow:O}] Iniciando StickyNotes.App...\n");
+
+            // 1. Evitar múltiples instancias simultáneas mediante un Mutex con nombre
+            const string mutexName = "Local\\StickyNotes_Win11_SingleInstanceMutex";
+            _singleInstanceMutex = new Mutex(true, mutexName, out bool isOnlyInstance);
+
+            File.AppendAllText(logPath, $"[{DateTime.UtcNow:O}] Mutex adquirido: {isOnlyInstance}\n");
+            if (!isOnlyInstance)
+            {
+                File.AppendAllText(logPath, $"[{DateTime.UtcNow:O}] Otra instancia ya está en ejecución. Saliendo.\n");
+                return;
+            }
+
+            // 2. Inicializar arquitectura WinUI 3 y XamlApplication
+            File.AppendAllText(logPath, $"[{DateTime.UtcNow:O}] Inicializando ComWrappers...\n");
+            WinRT.ComWrappersSupport.InitializeComWrappers();
+
+            File.AppendAllText(logPath, $"[{DateTime.UtcNow:O}] Ejecutando Application.Start...\n");
+            Application.Start(p =>
+            {
+                try
+                {
+                    File.AppendAllText(logPath, $"[{DateTime.UtcNow:O}] En Application.Start callback...\n");
+                    var context = new DispatcherQueueSynchronizationContext(DispatcherQueue.GetForCurrentThread());
+                    SynchronizationContext.SetSynchronizationContext(context);
+
+                    File.AppendAllText(logPath, $"[{DateTime.UtcNow:O}] Creando host...\n");
+                    var host = CreateHostBuilder(args).Build();
+
+                    File.AppendAllText(logPath, $"[{DateTime.UtcNow:O}] Verificando base de datos...\n");
+                    EnsureDatabaseSchemaWithRecovery(host);
+
+                    File.AppendAllText(logPath, $"[{DateTime.UtcNow:O}] Iniciando host...\n");
+                    host.Start();
+
+                    File.AppendAllText(logPath, $"[{DateTime.UtcNow:O}] Instanciando App...\n");
+                    _ = new App(host.Services);
+                    File.AppendAllText(logPath, $"[{DateTime.UtcNow:O}] App instanciada con éxito.\n");
+                }
+                catch (Exception ex)
+                {
+                    File.AppendAllText(logPath, $"[{DateTime.UtcNow:O}] ERROR en Application.Start: {ex}\n");
+                    throw;
+                }
+            });
         }
-
-        // 2. Inicializar arquitectura WinUI 3 y XamlApplication
-        WinRT.ComWrappersSupport.InitializeComWrappers();
-
-        Application.Start(p =>
+        catch (Exception ex)
         {
-            var context = new DispatcherQueueSynchronizationContext(DispatcherQueue.GetForCurrentThread());
-            SynchronizationContext.SetSynchronizationContext(context);
-
-            var host = CreateHostBuilder(args).Build();
-
-            // Inicializar y actualizar el esquema antes de crear ventanas o arrancar servicios.
-            EnsureDatabaseSchemaWithRecovery(host);
-
-            host.Start();
-
-            // Arrancar la aplicación WinUI 3
-            _ = new App(host.Services);
-        });
+            File.AppendAllText(logPath, $"[{DateTime.UtcNow:O}] ERROR FATAL en Main: {ex}\n");
+        }
     }
 
     private static void EnsureDatabaseSchemaWithRecovery(IHost host)

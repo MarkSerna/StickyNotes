@@ -30,14 +30,14 @@
                     <SolidColorBrush x:Key="AppDividerBrush" Color="#25FFFFFF" />
                 </ResourceDictionary>
                 <ResourceDictionary x:Key="Default">
-                    <SolidColorBrush x:Key="AppSurfaceBrush" Color="{ThemeResource SystemControlBackgroundAltHighBrush}" />
-                    <SolidColorBrush x:Key="AppHeaderBrush" Color="{ThemeResource SystemControlBackgroundChromeMediumLowBrush}" />
-                    <SolidColorBrush x:Key="AppSubtleSurfaceBrush" Color="{ThemeResource SystemControlBackgroundBaseLowBrush}" />
-                    <SolidColorBrush x:Key="AppTextBrush" Color="{ThemeResource SystemControlForegroundBaseHighColor}" />
-                    <SolidColorBrush x:Key="AppSecondaryTextBrush" Color="{ThemeResource SystemControlForegroundBaseMediumLowColor}" />
-                    <SolidColorBrush x:Key="AppIconBrush" Color="{ThemeResource SystemControlForegroundBaseHighColor}" />
-                    <SolidColorBrush x:Key="AppBorderBrush" Color="{ThemeResource SystemControlForegroundBaseLowColor}" />
-                    <SolidColorBrush x:Key="AppDividerBrush" Color="{ThemeResource SystemControlForegroundBaseLowColor}" />
+                    <SolidColorBrush x:Key="AppSurfaceBrush" Color="#FF1A1A1A" />
+                    <SolidColorBrush x:Key="AppHeaderBrush" Color="#FF252525" />
+                    <SolidColorBrush x:Key="AppSubtleSurfaceBrush" Color="#FF2A2A2A" />
+                    <SolidColorBrush x:Key="AppTextBrush" Color="#FFF0F0F0" />
+                    <SolidColorBrush x:Key="AppSecondaryTextBrush" Color="#FFA9A9A9" />
+                    <SolidColorBrush x:Key="AppIconBrush" Color="#FFE0E0E0" />
+                    <SolidColorBrush x:Key="AppBorderBrush" Color="#FF3A3A3A" />
+                    <SolidColorBrush x:Key="AppDividerBrush" Color="#25FFFFFF" />
                 </ResourceDictionary>
             </ResourceDictionary.ThemeDictionaries>
 
