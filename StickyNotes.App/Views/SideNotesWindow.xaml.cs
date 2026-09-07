@@ -1,7 +1,9 @@
 using System;
 using System.Collections.Generic;
 using System.Collections.ObjectModel;
+using System.IO;
 using System.Linq;
+using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI;
@@ -41,6 +43,16 @@ public sealed partial class SideNotesWindow : Window
     private const int CollapsedWidth = 16;
     private int _collapsedHeight = 84;
 
+    private RectInt32? _currentWorkArea = null;
+    private int? _customCollapsedY = null;
+
+    private bool _isPointerDownOnHandle = false;
+    private bool _isDraggingHandle = false;
+    private (int X, int Y) _dragStartCursor;
+    private int _dragStartWindowX;
+    private int _dragStartWindowY;
+    private readonly DispatcherTimer _hoverExpandTimer;
+
     private bool _isAnimating = false;
     private bool _animExpanding = false;
     private int _animStartX;
@@ -69,7 +81,22 @@ public sealed partial class SideNotesWindow : Window
         _presenter.IsResizable = false;
         _presenter.SetBorderAndTitleBar(false, false);
 
-        // Ajustar al área de trabajo del monitor principal
+        // Cargar configuración de posición previa guardada
+        LoadWidgetConfig();
+
+        // Timer de auto-expansión al pasar el mouse por el tirador (220ms de gracia para no interferir con arrastre)
+        _hoverExpandTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(220) };
+        _hoverExpandTimer.Tick += (s, e) =>
+        {
+            _hoverExpandTimer.Stop();
+            if (!_isExpanded && !_isDraggingHandle && !_isPointerDownOnHandle)
+            {
+                SetExpanded(true);
+            }
+        };
+
+        // Aplicar simetría visual y ajustar al monitor configurado
+        ApplyEdgeVisuals();
         PositionToMonitorEdge();
 
         // Timer de auto-ocultado al retirar el mouse (350ms de gracia)
@@ -77,7 +104,7 @@ public sealed partial class SideNotesWindow : Window
         _autoHideTimer.Tick += (s, e) =>
         {
             _autoHideTimer.Stop();
-            if (!_isPinned && _isExpanded)
+            if (!_isPinned && _isExpanded && !_isDraggingHandle)
             {
                 SetExpanded(false);
             }
@@ -91,11 +118,28 @@ public sealed partial class SideNotesWindow : Window
         _ = LoadNotesAsync();
     }
 
+    private RectInt32 GetActiveWorkArea()
+    {
+        if (_currentWorkArea.HasValue)
+        {
+            return _currentWorkArea.Value;
+        }
+
+        var hWnd = WindowNative.GetWindowHandle(this);
+        return MonitorHelper.GetMonitorWorkAreaFromWindow(hWnd);
+    }
+
     private void PositionToCollapsedEdge()
     {
-        var workArea = MonitorHelper.GetPrimaryMonitorWorkArea();
-        var y = workArea.Y + (workArea.Height - _collapsedHeight) / 2;
-        var x = _isRightEdge ? (workArea.X + workArea.Width - CollapsedWidth) : workArea.X;
+        var workArea = GetActiveWorkArea();
+        var y = _customCollapsedY.HasValue 
+            ? Math.Clamp(_customCollapsedY.Value, workArea.Y + 10, workArea.Y + workArea.Height - _collapsedHeight - 10)
+            : workArea.Y + (workArea.Height - _collapsedHeight) / 2;
+
+        var x = _isRightEdge 
+            ? (workArea.X + workArea.Width - CollapsedWidth) 
+            : workArea.X;
+
         _appWindow.MoveAndResize(new RectInt32(x, y, CollapsedWidth, _collapsedHeight));
     }
 
@@ -107,7 +151,7 @@ public sealed partial class SideNotesWindow : Window
             return;
         }
 
-        var workArea = MonitorHelper.GetPrimaryMonitorWorkArea();
+        var workArea = GetActiveWorkArea();
         var height = workArea.Height;
         var y = workArea.Y;
         var x = _isRightEdge ? (workArea.X + workArea.Width - ExpandedWidth) : workArea.X;
@@ -122,7 +166,7 @@ public sealed partial class SideNotesWindow : Window
             _isAnimating = false;
         }
 
-        var workArea = MonitorHelper.GetPrimaryMonitorWorkArea();
+        var workArea = GetActiveWorkArea();
         var fullHeight = workArea.Height;
         var y = workArea.Y;
         _animY = y;
@@ -376,21 +420,88 @@ public sealed partial class SideNotesWindow : Window
         IconActiveChecklist.Foreground = palette.ForegroundBrush;
     }
 
-    #region Auto-ocultado y Hover
+    #region Auto-ocultado, Hover y Arrastre (Drag & Drop) entre bordes y pantallas
 
     private void PeekingHandle_PointerEntered(object sender, PointerRoutedEventArgs e)
     {
-        if (!_isExpanded)
+        if (!_isExpanded && !_isDraggingHandle)
         {
-            SetExpanded(true);
+            _hoverExpandTimer.Start();
         }
+    }
+
+    private void PeekingHandle_PointerExited(object sender, PointerRoutedEventArgs e)
+    {
+        _hoverExpandTimer.Stop();
     }
 
     private void PeekingHandle_PointerPressed(object sender, PointerRoutedEventArgs e)
     {
-        if (!_isExpanded)
+        _hoverExpandTimer.Stop();
+        _isPointerDownOnHandle = true;
+        _isDraggingHandle = false;
+        _dragStartCursor = MonitorHelper.GetCursorPosition();
+        _dragStartWindowX = _appWindow.Position.X;
+        _dragStartWindowY = _appWindow.Position.Y;
+        PeekingHandle.CapturePointer(e.Pointer);
+    }
+
+    private void PeekingHandle_PointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_isPointerDownOnHandle) return;
+
+        var currentCursor = MonitorHelper.GetCursorPosition();
+        var dx = currentCursor.X - _dragStartCursor.X;
+        var dy = currentCursor.Y - _dragStartCursor.Y;
+
+        if (!_isDraggingHandle && (Math.Abs(dx) > 6 || Math.Abs(dy) > 6))
         {
-            SetExpanded(true);
+            _isDraggingHandle = true;
+            PeekingHandle.Opacity = 0.85;
+            PeekingHandle.BorderBrush = new SolidColorBrush(Microsoft.UI.Colors.DodgerBlue);
+        }
+
+        if (_isDraggingHandle)
+        {
+            // Desplazar la ventana libremente por cualquier pantalla acompañando al cursor
+            var newX = _dragStartWindowX + dx;
+            var newY = _dragStartWindowY + dy;
+            _appWindow.Move(new PointInt32(newX, newY));
+        }
+    }
+
+    private void PeekingHandle_PointerReleased(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_isPointerDownOnHandle) return;
+        _isPointerDownOnHandle = false;
+        PeekingHandle.ReleasePointerCapture(e.Pointer);
+
+        PeekingHandle.Opacity = 1.0;
+        PeekingHandle.BorderBrush = new SolidColorBrush(ColorHelper.FromHex("#334155"));
+
+        if (_isDraggingHandle)
+        {
+            _isDraggingHandle = false;
+
+            // Detectar en qué monitor y en qué borde se soltó
+            var cursor = MonitorHelper.GetCursorPosition();
+            var targetWorkArea = MonitorHelper.GetMonitorWorkAreaFromPoint(cursor.X, cursor.Y);
+
+            // Determinar si está más cerca del borde izquierdo o derecho
+            bool snapToRight = (cursor.X - targetWorkArea.X) >= (targetWorkArea.Width / 2);
+
+            _currentWorkArea = targetWorkArea;
+            _isRightEdge = snapToRight;
+            _customCollapsedY = Math.Clamp(cursor.Y - _collapsedHeight / 2, targetWorkArea.Y + 20, targetWorkArea.Y + targetWorkArea.Height - _collapsedHeight - 20);
+
+            ApplyEdgeVisuals();
+            PositionToCollapsedEdge();
+            SaveWidgetConfig();
+        }
+        else
+        {
+            // Clic simple: abrir o cerrar
+            SetExpanded(!_isExpanded);
         }
     }
 
@@ -401,7 +512,7 @@ public sealed partial class SideNotesWindow : Window
 
     private void ExpandedPanel_PointerExited(object sender, PointerRoutedEventArgs e)
     {
-        if (!_isPinned)
+        if (!_isPinned && !_isDraggingHandle)
         {
             _autoHideTimer.Start();
         }
@@ -421,10 +532,173 @@ public sealed partial class SideNotesWindow : Window
         SetExpanded(false);
     }
 
-    private void BtnToggleEdge_Click(object sender, RoutedEventArgs e)
+    private void PositionFlyout_Opening(object? sender, object e)
+    {
+        if (MenuToggleEdge != null)
+        {
+            MenuToggleEdge.Text = _isRightEdge ? "Mover al borde izquierdo" : "Mover al borde derecho";
+        }
+
+        var monitors = MonitorHelper.GetAllMonitors();
+        if (monitors.Count > 1)
+        {
+            MenuMonitorsSeparator.Visibility = Visibility.Visible;
+            MenuMonitorsSubItem.Visibility = Visibility.Visible;
+            MenuMonitorsSubItem.Items.Clear();
+
+            var activeWorkArea = GetActiveWorkArea();
+
+            foreach (var mon in monitors)
+            {
+                var isCurrent = mon.WorkArea.X == activeWorkArea.X && mon.WorkArea.Y == activeWorkArea.Y;
+                var item = new MenuFlyoutItem
+                {
+                    Text = $"Pantalla {mon.Index} ({mon.Bounds.Width}x{mon.Bounds.Height})" + (isCurrent ? " (Actual)" : (mon.IsPrimary ? " (Principal)" : ""))
+                };
+                item.Click += (s, ev) =>
+                {
+                    MoveToMonitor(mon.WorkArea);
+                };
+                MenuMonitorsSubItem.Items.Add(item);
+            }
+        }
+        else
+        {
+            MenuMonitorsSeparator.Visibility = Visibility.Collapsed;
+            MenuMonitorsSubItem.Visibility = Visibility.Collapsed;
+        }
+    }
+
+    private void MenuToggleEdge_Click(object sender, RoutedEventArgs e)
     {
         _isRightEdge = !_isRightEdge;
-        SetExpanded(_isExpanded, animate: false);
+        ApplyEdgeVisuals();
+        SaveWidgetConfig();
+        PositionToMonitorEdge();
+    }
+
+    private void MoveToMonitor(RectInt32 targetWorkArea)
+    {
+        _currentWorkArea = targetWorkArea;
+        SaveWidgetConfig();
+        PositionToMonitorEdge();
+    }
+
+    private void ApplyEdgeVisuals()
+    {
+        if (_isRightEdge)
+        {
+            // Tirador colapsado: a la derecha, con bordes redondeados hacia la izquierda
+            PeekingHandle.HorizontalAlignment = HorizontalAlignment.Right;
+            PeekingHandle.CornerRadius = new CornerRadius(8, 0, 0, 8);
+            PeekingHandle.BorderThickness = new Thickness(1, 1, 0, 1);
+
+            // Panel expandido: anclado a la derecha
+            ExpandedPanel.HorizontalAlignment = HorizontalAlignment.Right;
+            ExpandedPanel.BorderThickness = new Thickness(1, 0, 0, 0);
+
+            Col0.Width = new GridLength(18);
+            Col1.Width = new GridLength(1, GridUnitType.Star);
+            Col2.Width = new GridLength(140);
+
+            Grid.SetColumn(ExpandedPillsBorder, 0);
+            ExpandedPillsBorder.BorderThickness = new Thickness(0, 0, 1, 0);
+
+            Grid.SetColumn(ActiveNoteContainer, 1);
+
+            Grid.SetColumn(NotesSidebarContainer, 2);
+            NotesSidebarContainer.BorderThickness = new Thickness(1, 0, 0, 0);
+
+            if (MenuToggleEdge != null)
+            {
+                MenuToggleEdge.Text = "Mover al borde izquierdo";
+            }
+        }
+        else
+        {
+            // Tirador colapsado: a la izquierda, con bordes redondeados hacia la derecha
+            PeekingHandle.HorizontalAlignment = HorizontalAlignment.Left;
+            PeekingHandle.CornerRadius = new CornerRadius(0, 8, 8, 0);
+            PeekingHandle.BorderThickness = new Thickness(0, 1, 1, 1);
+
+            // Panel expandido: anclado a la izquierda
+            ExpandedPanel.HorizontalAlignment = HorizontalAlignment.Left;
+            ExpandedPanel.BorderThickness = new Thickness(0, 0, 1, 0);
+
+            Col0.Width = new GridLength(140);
+            Col1.Width = new GridLength(1, GridUnitType.Star);
+            Col2.Width = new GridLength(18);
+
+            Grid.SetColumn(NotesSidebarContainer, 0);
+            NotesSidebarContainer.BorderThickness = new Thickness(0, 0, 1, 0);
+
+            Grid.SetColumn(ActiveNoteContainer, 1);
+
+            Grid.SetColumn(ExpandedPillsBorder, 2);
+            ExpandedPillsBorder.BorderThickness = new Thickness(1, 0, 0, 0);
+
+            if (MenuToggleEdge != null)
+            {
+                MenuToggleEdge.Text = "Mover al borde derecho";
+            }
+        }
+    }
+
+    private void SaveWidgetConfig()
+    {
+        try
+        {
+            var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            var folder = Path.Combine(appData, "StickyNotesApp");
+            Directory.CreateDirectory(folder);
+            var file = Path.Combine(folder, "widget_position.json");
+
+            var config = new
+            {
+                IsRightEdge = _isRightEdge,
+                CustomY = _customCollapsedY,
+                MonitorX = _currentWorkArea?.X,
+                MonitorY = _currentWorkArea?.Y
+            };
+            var json = JsonSerializer.Serialize(config, new JsonSerializerOptions { WriteIndented = true });
+            File.WriteAllText(file, json);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[SideNotes] Error al guardar config: {ex.Message}");
+        }
+    }
+
+    private void LoadWidgetConfig()
+    {
+        try
+        {
+            var appData = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData);
+            var file = Path.Combine(appData, "StickyNotesApp", "widget_position.json");
+            if (File.Exists(file))
+            {
+                var json = File.ReadAllText(file);
+                using var doc = JsonDocument.Parse(json);
+                var root = doc.RootElement;
+                if (root.TryGetProperty("IsRightEdge", out var edgeProp))
+                {
+                    _isRightEdge = edgeProp.GetBoolean();
+                }
+                if (root.TryGetProperty("CustomY", out var yProp) && yProp.ValueKind == JsonValueKind.Number)
+                {
+                    _customCollapsedY = yProp.GetInt32();
+                }
+                if (root.TryGetProperty("MonitorX", out var mxProp) && mxProp.ValueKind == JsonValueKind.Number &&
+                    root.TryGetProperty("MonitorY", out var myProp) && myProp.ValueKind == JsonValueKind.Number)
+                {
+                    _currentWorkArea = MonitorHelper.GetMonitorWorkAreaFromPoint(mxProp.GetInt32() + 50, myProp.GetInt32() + 50);
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[SideNotes] Error al cargar config: {ex.Message}");
+        }
     }
 
     #endregion

@@ -13,14 +13,18 @@
         <Border x:Name="PeekingHandle"
                 Width="16"
                 HorizontalAlignment="Right"
-                VerticalAlignment="Center"
+                VerticalAlignment="Top"
                 CornerRadius="8,0,0,8"
                 Background="#E60F172A"
                 BorderThickness="1,1,0,1"
                 BorderBrush="#334155"
                 PointerEntered="PeekingHandle_PointerEntered"
+                PointerExited="PeekingHandle_PointerExited"
                 PointerPressed="PeekingHandle_PointerPressed"
-                ToolTipService.ToolTip="Notas rápidas (Pasa el cursor o haz clic)">
+                PointerMoved="PeekingHandle_PointerMoved"
+                PointerReleased="PeekingHandle_PointerReleased"
+                PointerCanceled="PeekingHandle_PointerReleased"
+                ToolTipService.ToolTip="Notas rápidas (Pasa el cursor para abrir, o arrastra para mover de borde/pantalla)">
             <StackPanel x:Name="PeekingPillsStack"
                         VerticalAlignment="Center"
                         HorizontalAlignment="Center"
@@ -42,15 +46,16 @@
             </Grid.RenderTransform>
             <Grid.ColumnDefinitions>
                 <!-- Tira de borde con píldoras de colores -->
-                <ColumnDefinition Width="18"/>
-                <!-- Columna Izquierda: Tarjeta Completa de la Nota Activa -->
-                <ColumnDefinition Width="*"/>
-                <!-- Columna Derecha: Barra Lateral de Lista de Notas -->
-                <ColumnDefinition Width="140"/>
+                <ColumnDefinition x:Name="Col0" Width="18"/>
+                <!-- Columna: Tarjeta Completa de la Nota Activa -->
+                <ColumnDefinition x:Name="Col1" Width="*"/>
+                <!-- Columna: Barra Lateral de Lista de Notas -->
+                <ColumnDefinition x:Name="Col2" Width="140"/>
             </Grid.ColumnDefinitions>
 
             <!-- TIRA DE REPOSO INTEGRADA EN EL BORDE EXPANDIDO -->
-            <Border Grid.Column="0"
+            <Border x:Name="ExpandedPillsBorder"
+                    Grid.Column="0"
                     Background="#D90F172A"
                     BorderThickness="0,0,1,0"
                     BorderBrush="#1E293B"
@@ -63,7 +68,7 @@
             </Border>
 
             <!-- COLUMNA PRINCIPAL: EDITOR DE LA NOTA SELECCIONADA -->
-            <Grid Grid.Column="1" Margin="8,8,6,8">
+            <Grid x:Name="ActiveNoteContainer" Grid.Column="1" Margin="8,8,6,8">
                 <!-- TARJETA ESTILO STICKY NOTE IDÉNTICA AL MODO FLOTANTE -->
                 <Grid x:Name="ActiveNoteCard"
                       RequestedTheme="Light"
@@ -259,8 +264,8 @@
                 </Grid>
             </Grid>
 
-            <!-- COLUMNA DERECHA: LISTA DE PESTAÑAS 'NOTAS' (Imagen 3) -->
-            <Grid Grid.Column="2" Background="#020617" BorderThickness="1,0,0,0" BorderBrush="#1E293B">
+            <!-- COLUMNA: LISTA DE PESTAÑAS 'NOTAS' (Imagen 3) -->
+            <Grid x:Name="NotesSidebarContainer" Grid.Column="2" Background="#020617" BorderThickness="1,0,0,0" BorderBrush="#1E293B">
                 <Grid.RowDefinitions>
                     <!-- Cabecera de la columna 'NOTAS' -->
                     <RowDefinition Height="36"/>
@@ -293,6 +298,24 @@
                         <ToggleButton x:Name="BtnToggleTrash" Click="BtnToggleTrash_Click" ToolTipService.ToolTip="Papelera" Background="Transparent" BorderThickness="0" Padding="5,3">
                             <FontIcon Glyph="&#xE74D;" FontSize="11" Foreground="#94A3B8"/>
                         </ToggleButton>
+                        <Button x:Name="BtnPositionMenu" ToolTipService.ToolTip="Posición y Pantallas" Background="Transparent" BorderThickness="0" Padding="5,3">
+                            <FontIcon Glyph="&#xE740;" FontSize="11" Foreground="#94A3B8"/>
+                            <Button.Flyout>
+                                <MenuFlyout x:Name="PositionFlyout" Opening="PositionFlyout_Opening">
+                                    <MenuFlyoutItem x:Name="MenuToggleEdge" Text="Mover al borde izquierdo" Click="MenuToggleEdge_Click">
+                                        <MenuFlyoutItem.Icon>
+                                            <FontIcon Glyph="&#xE765;"/>
+                                        </MenuFlyoutItem.Icon>
+                                    </MenuFlyoutItem>
+                                    <MenuFlyoutSeparator x:Name="MenuMonitorsSeparator"/>
+                                    <MenuFlyoutSubItem x:Name="MenuMonitorsSubItem" Text="Mover a otra pantalla">
+                                        <MenuFlyoutSubItem.Icon>
+                                            <FontIcon Glyph="&#xE7F4;"/>
+                                        </MenuFlyoutSubItem.Icon>
+                                    </MenuFlyoutSubItem>
+                                </MenuFlyout>
+                            </Button.Flyout>
+                        </Button>
                         <Button Click="BtnSettings_Click" ToolTipService.ToolTip="Configuración Google Drive" Background="Transparent" BorderThickness="0" Padding="5,3">
                             <FontIcon Glyph="&#xE713;" FontSize="11" Foreground="#94A3B8"/>
                         </Button>
