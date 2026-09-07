@@ -1,28 +1,37 @@
+using System;
 using StickyNotes.Core.Models;
 
 namespace StickyNotes.App.Services;
 
 public class AppManager
 {
-    // Singleton sencillo para resolver referencias de código que esperan AppManager.Instance
     public static AppManager Instance { get; } = new AppManager();
+    private WindowManager? _windowManager;
 
     private AppManager()
     {
     }
 
+    public void RegisterWindowManager(WindowManager windowManager)
+    {
+        _windowManager = windowManager;
+    }
+
     public void CreateAndOpenNewNote(double x, double y)
     {
-        // Implementación mínima: en la versión completa crearía una nueva nota y la abriría.
+        _ = _windowManager?.CreateAndOpenNewNoteFloatingAsync(x, y);
     }
 
     public void OpenNoteAsFloating(Note? note)
     {
-        // Implementación mínima
+        if (note != null)
+        {
+            _ = _windowManager?.OpenNoteAsFloatingAsync(note.Id);
+        }
     }
 
     public void SwitchToFloatingMode()
     {
-        // Implementación mínima
+        _ = _windowManager?.ShowAllFloatingNotesAsync();
     }
 }

@@ -37,8 +37,24 @@ public class TrayIconService : IDisposable
             ToolTipText = "Notas Rápidas (Win+Alt+N)"
         };
 
-        // Asignar icono de la aplicación (Assets/TrayIcon.ico)
-        _trayIcon.IconSource = new BitmapImage(new Uri("ms-appx:///Assets/TrayIcon.ico"));
+        // Asignar icono de la aplicación (físico en unpackaged o ms-appx)
+        try
+        {
+            var baseDir = AppContext.BaseDirectory;
+            var physicalIcoPath = System.IO.Path.Combine(baseDir, "Assets", "TrayIcon.ico");
+            if (System.IO.File.Exists(physicalIcoPath))
+            {
+                _trayIcon.IconSource = new BitmapImage(new Uri(physicalIcoPath));
+            }
+            else
+            {
+                _trayIcon.IconSource = new BitmapImage(new Uri("ms-appx:///Assets/TrayIcon.ico"));
+            }
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[TrayIcon] Advertencia al cargar IconSource: {ex.Message}");
+        }
 
         // Doble clic abre nueva nota
         // La API de H.NotifyIcon puede variar; en esta implementación mínima omitimos el evento

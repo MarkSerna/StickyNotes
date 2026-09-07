@@ -18,6 +18,6 @@ public partial class App : Application
     protected override void OnLaunched(LaunchActivatedEventArgs args)
     {
         var windowManager = Services.GetRequiredService<WindowManager>();
-        windowManager.Initialize();
+        windowManager.Initialize(Microsoft.UI.Dispatching.DispatcherQueue.GetForCurrentThread());
     }
 }
