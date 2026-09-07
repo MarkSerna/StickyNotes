@@ -64,39 +64,63 @@ public static class Program
 
             System.Diagnostics.Debug.WriteLine($"📊 Database path: {dbPath}");
 
+            // 1. Respaldo preventivo automático si el archivo ya existe y tiene contenido
+            if (!string.IsNullOrWhiteSpace(dbPath) && File.Exists(dbPath))
+            {
+                try
+                {
+                    var fileInfo = new FileInfo(dbPath);
+                    if (fileInfo.Length > 0)
+                    {
+                        var backupPath = dbPath + ".bak";
+                        File.Copy(dbPath, backupPath, overwrite: true);
+                        System.Diagnostics.Debug.WriteLine($"🛡️ Backup preventivo creado: {backupPath}");
+                    }
+                }
+                catch (Exception backupEx)
+                {
+                    System.Diagnostics.Debug.WriteLine($"⚠️ No se pudo crear backup preventivo: {backupEx.Message}");
+                }
+            }
+
             try
             {
-                // Intenta aplicar migraciones primero
-                System.Diagnostics.Debug.WriteLine("🔄 Executing migrations...");
+                // 2. Si la base de datos es nueva (primer arranque), inicializar con Migrate()
+                if (!string.IsNullOrWhiteSpace(dbPath) && !File.Exists(dbPath))
+                {
+                    System.Diagnostics.Debug.WriteLine("🌱 Base de datos nueva, inicializando esquema...");
+                    db.Database.Migrate();
+                    System.Diagnostics.Debug.WriteLine("✅ Esquema inicial creado con éxito!");
+                    return;
+                }
+
+                // 3. Aplicar migraciones pendientes
+                System.Diagnostics.Debug.WriteLine("🔄 Ejecutando migraciones pendientes...");
                 db.Database.Migrate();
 
-                // Valida que la tabla Notes existe
-                System.Diagnostics.Debug.WriteLine("✅ Validating Notes table...");
+                // 4. Validar que la tabla Notes existe
+                System.Diagnostics.Debug.WriteLine("✅ Validando tabla Notes...");
                 db.Database.ExecuteSqlRaw("SELECT 1 FROM Notes LIMIT 0");
-                System.Diagnostics.Debug.WriteLine("✅ Notes table exists!");
+                System.Diagnostics.Debug.WriteLine("✅ Tabla Notes verificada con éxito!");
             }
             catch (Exception ex)
             {
-                System.Diagnostics.Debug.WriteLine($"❌ Error during migration: {ex.Message}");
+                System.Diagnostics.Debug.WriteLine($"❌ Error durante inicialización/migración: {ex.Message}");
                 System.Diagnostics.Debug.WriteLine($"   Inner exception: {ex.InnerException?.Message}");
 
+                // Si la tabla no existe en absoluto (base de datos vacía o sin migración aplicada)
                 if (ex.Message.Contains("no such table: Notes", StringComparison.OrdinalIgnoreCase) || 
                     ex.InnerException?.Message.Contains("no such table: Notes", StringComparison.OrdinalIgnoreCase) == true)
                 {
-                    System.Diagnostics.Debug.WriteLine("🔨 Notes table missing, creating from model...");
-
-                    // Si Migrate() falló al crear la tabla, usa EnsureCreated
-                    // Primero cierra cualquier conexión abierta
+                    System.Diagnostics.Debug.WriteLine("🔨 Tabla Notes no detectada, inicializando esquema con EnsureCreated...");
                     db.Database.CloseConnection();
-
-                    // Luego destruye y recrea completamente
-                    db.Database.EnsureDeleted();
+                    // NUNCA borrar datos existentes: solo EnsureCreated para crear tablas faltantes
                     db.Database.EnsureCreated();
-
-                    System.Diagnostics.Debug.WriteLine("✅ Database schema created successfully!");
+                    System.Diagnostics.Debug.WriteLine("✅ Esquema inicializado de forma segura (sin borrado destructivo)!");
                 }
                 else
                 {
+                    // Relanzar la excepción para diagnóstico sin destruir la base de datos
                     throw;
                 }
             }
@@ -131,12 +155,12 @@ public static class Program
                 // Repositorios
                 services.AddScoped<INoteRepository, StickyNotes.Data.Repositories.SqliteNoteRepository>();
 
-                // Servicios de sincronización Google Drive
+                // Servicios de sincronización Google Drive (usando IServiceScopeFactory para scopes aislados)
                 var clientId = configuration["GoogleDrive:ClientId"] ?? string.Empty;
                 var clientSecret = configuration["GoogleDrive:ClientSecret"] ?? string.Empty;
 
                 services.AddSingleton(sp => new GoogleDriveSyncService(
-                    sp.GetRequiredService<INoteRepository>(),
+                    sp.GetRequiredService<IServiceScopeFactory>(),
                     clientId,
                     clientSecret));
 

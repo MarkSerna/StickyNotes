@@ -10,6 +10,7 @@ using Google.Apis.Auth.OAuth2;
 using Google.Apis.Drive.v3;
 using Google.Apis.Drive.v3.Data;
 using Google.Apis.Services;
+using Microsoft.Extensions.DependencyInjection;
 using StickyNotes.Core.Enums;
 using StickyNotes.Core.Models;
 using StickyNotes.Data.Repositories;
@@ -22,7 +23,7 @@ public record SyncReport(int Uploaded, int Downloaded, int Deleted, bool IsSucce
 
 public class GoogleDriveSyncService
 {
-    private readonly INoteRepository _noteRepository;
+    private readonly IServiceScopeFactory _scopeFactory;
     private readonly string _clientId;
     private readonly string _clientSecret;
     private DriveService? _driveService;
@@ -30,9 +31,9 @@ public class GoogleDriveSyncService
 
     public bool IsAuthenticated => _driveService != null;
 
-    public GoogleDriveSyncService(INoteRepository noteRepository, string clientId, string clientSecret)
+    public GoogleDriveSyncService(IServiceScopeFactory scopeFactory, string clientId, string clientSecret)
     {
-        _noteRepository = noteRepository;
+        _scopeFactory = scopeFactory;
         _clientId = clientId;
         _clientSecret = clientSecret;
     }
@@ -92,13 +93,16 @@ public class GoogleDriveSyncService
         await _syncLock.WaitAsync(cancellationToken);
         try
         {
+            using var scope = _scopeFactory.CreateScope();
+            var noteRepository = scope.ServiceProvider.GetRequiredService<INoteRepository>();
+
             int uploaded = 0;
             int downloaded = 0;
             int deleted = 0;
 
             // 1. Obtener archivos remotos de la carpeta oculta appDataFolder
             var remoteFiles = await ListRemoteNotesAsync(cancellationToken);
-            var localNotes = await _noteRepository.GetAllNotesIncludingDeletedAsync();
+            var localNotes = await noteRepository.GetAllNotesIncludingDeletedAsync();
             var localNotesMap = localNotes.ToDictionary(n => n.Id);
 
             // 2. Procesar notas remotas hacia local
@@ -122,7 +126,7 @@ public class GoogleDriveSyncService
                     {
                         var newLocal = remotePayload.ToDomainModel();
                         newLocal.SyncStatus = SyncStatus.Synced;
-                        await _noteRepository.CreateAsync(newLocal);
+                        await noteRepository.CreateAsync(newLocal);
                         downloaded++;
                     }
                 }
@@ -133,14 +137,14 @@ public class GoogleDriveSyncService
                     {
                         if (remotePayload.IsDeleted && localNote.DeletedAt == null)
                         {
-                            await _noteRepository.SoftDeleteAsync(localNote.Id);
+                            await noteRepository.SoftDeleteAsync(localNote.Id);
                             deleted++;
                         }
                         else if (!remotePayload.IsDeleted)
                         {
                             remotePayload.ApplyTo(localNote);
                             localNote.SyncStatus = SyncStatus.Synced;
-                            await _noteRepository.UpdateAsync(localNote);
+                            await noteRepository.UpdateAsync(localNote);
                             downloaded++;
                         }
                     }
@@ -148,7 +152,7 @@ public class GoogleDriveSyncService
             }
 
             // 3. Procesar notas locales pendientes de subida a Google Drive
-            var pendingLocal = await _noteRepository.GetPendingSyncNotesAsync();
+            var pendingLocal = await noteRepository.GetPendingSyncNotesAsync();
             foreach (var local in pendingLocal)
             {
                 if (cancellationToken.IsCancellationRequested) break;
@@ -181,7 +185,7 @@ public class GoogleDriveSyncService
                     uploaded++;
                 }
 
-                await _noteRepository.MarkAsSyncedAsync(local.Id);
+                await noteRepository.MarkAsSyncedAsync(local.Id);
             }
 
             return new SyncReport(uploaded, downloaded, deleted, true);
