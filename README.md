@@ -39,14 +39,18 @@ El proyecto sigue principios de **Clean Architecture** y modularidad estricta:
 
 ```text
 StickyNotes/
+├── .github/workflows/          # Pipelines de CI/CD (GitHub Actions)
 ├── .specify/                   # Ecosistema SDD (Spec-Driven Development / Spec-Kit)
 │   ├── memory/                 # Constitución y principios arquitectónicos
-│   ├── specs/                  # Especificaciones de características
+│   ├── specs/                  # Especificaciones formales de características (001 - 006)
 │   └── templates/              # Plantillas estandarizadas (Spec, Plan, Tasks)
 ├── StickyNotes.Core/           # Modelos de dominio puros (Note, Enums, Interfaces)
 ├── StickyNotes.Data/           # Persistencia SQLite, EF Core 8, DbContext y Repositorio
 ├── StickyNotes.Sync/           # Sincronización Google Drive, OAuth 2.0 y DPAPI
 ├── StickyNotes.App/            # Aplicación WinUI 3 (Vistas, ViewModels, Tray y Hotkeys)
+├── StickyNotes.Tests/          # Suite de pruebas unitarias (xUnit, FluentAssertions, SQLite in-memory)
+├── scripts/                    # Scripts de utilidad y bootstrap
+├── web/                        # Prototipo y simulador web interactivo (React + Vite + Tailwind)
 ├── StickyNotes.sln             # Solución principal de Visual Studio / .NET CLI
 └── ROADMAP_TAREAS.md           # Seguimiento interno de tareas (ignorado en Git)
 ```
@@ -79,12 +83,17 @@ dotnet restore
 dotnet build StickyNotes.sln
 ```
 
-### 4. Ejecutar la aplicación
+### 4. Ejecutar pruebas unitarias
+```powershell
+dotnet test StickyNotes.Tests/StickyNotes.Tests.csproj
+```
+
+### 5. Ejecutar la aplicación
 ```powershell
 dotnet run --project StickyNotes.App/StickyNotes.App.csproj
 ```
 
-### 5. Publicar un ejecutable único (.exe sin dependencias)
+### 6. Publicar un ejecutable único (.exe sin dependencias)
 Para distribuir un binario unpackaged independiente de alto rendimiento:
 
 ```powershell
