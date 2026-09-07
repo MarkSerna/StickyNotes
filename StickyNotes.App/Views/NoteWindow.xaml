@@ -1,0 +1,152 @@
+<Window
+    x:Class="StickyNotes.App.Views.NoteWindow"
+    xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+    xmlns:d="http://schemas.microsoft.com/expression/blend/2008"
+    xmlns:mc="http://schemas.openxmlformats.org/markup-compatibility/2006"
+    xmlns:enums="using:StickyNotes.Core.Enums"
+    mc:Ignorable="d"
+    Title="Nota Rápida">
+
+    <Grid x:Name="RootGrid" RequestedTheme="Default" CornerRadius="8" BorderThickness="1">
+        <Grid.RowDefinitions>
+            <!-- Barra superior personalizada (arrastre, título y herramientas) -->
+            <RowDefinition Height="38"/>
+            <!-- Área de texto enriquecido (RichEditBox) -->
+            <RowDefinition Height="*"/>
+            <!-- Barra inferior de formato de texto y estado -->
+            <RowDefinition Height="36"/>
+        </Grid.RowDefinitions>
+
+        <!-- CABECERA DE LA NOTA -->
+        <Grid x:Name="AppTitleBar" Grid.Row="0" Padding="8,4,8,4">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="Auto"/>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Botón Nueva Nota (+) -->
+            <Button x:Name="BtnNewNote"
+                    Grid.Column="0"
+                    Click="BtnNewNote_Click"
+                    ToolTipService.ToolTip="Nueva nota (Ctrl+N)"
+                    Background="Transparent"
+                    BorderThickness="0"
+                    Padding="6,4">
+                    <FontIcon Glyph="&#xE710;" FontSize="13" Foreground="{ThemeResource AppIconBrush}"/>
+            </Button>
+
+            <!-- Título Editable de la Nota -->
+            <TextBox x:Name="TxtTitle"
+                     Grid.Column="1"
+                     PlaceholderText="Título de la nota..."
+                      Foreground="{ThemeResource AppTextBrush}"
+                      PlaceholderForeground="{ThemeResource AppSecondaryTextBrush}"
+                     BorderThickness="0"
+                     Background="Transparent"
+                     FontWeight="SemiBold"
+                     FontSize="12"
+                     VerticalAlignment="Center"
+                     Margin="4,0"
+                     TextChanged="TxtTitle_TextChanged"/>
+
+            <!-- Botones de Acción Superiores -->
+            <StackPanel Grid.Column="2" Orientation="Horizontal" Spacing="2">
+                <!-- Pin Siempre Encima (Always on Top) -->
+                <ToggleButton x:Name="BtnPinTop"
+                              Click="BtnPinTop_Click"
+                              ToolTipService.ToolTip="Mantener siempre encima"
+                              Background="Transparent"
+                              BorderThickness="0"
+                              Padding="6,4">
+                        <FontIcon Glyph="&#xE718;" FontSize="12" Foreground="{ThemeResource AppIconBrush}"/>
+                </ToggleButton>
+
+                <!-- Menú Selector de Color -->
+                <Button x:Name="BtnColorPicker"
+                        ToolTipService.ToolTip="Cambiar color de nota"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Padding="6,4">
+                    <FontIcon Glyph="&#xE790;" FontSize="12"/>
+                    <Button.Flyout>
+                        <MenuFlyout Placement="Bottom">
+                            <MenuFlyoutItem Text="Amarillo" Click="ColorItem_Click" Tag="Yellow"/>
+                            <MenuFlyoutItem Text="Verde" Click="ColorItem_Click" Tag="Green"/>
+                            <MenuFlyoutItem Text="Rosa" Click="ColorItem_Click" Tag="Pink"/>
+                            <MenuFlyoutItem Text="Púrpura" Click="ColorItem_Click" Tag="Purple"/>
+                            <MenuFlyoutItem Text="Azul" Click="ColorItem_Click" Tag="Blue"/>
+                            <MenuFlyoutItem Text="Carbón" Click="ColorItem_Click" Tag="Gray"/>
+                        </MenuFlyout>
+                    </Button.Flyout>
+                </Button>
+
+                <!-- Eliminar Nota -->
+                <Button x:Name="BtnDelete"
+                        Click="BtnDelete_Click"
+                        ToolTipService.ToolTip="Eliminar nota"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Padding="6,4">
+                        <FontIcon Glyph="&#xE74D;" FontSize="12" Foreground="{ThemeResource AppIconBrush}"/>
+                </Button>
+
+                <!-- Cerrar Ventana -->
+                <Button x:Name="BtnClose"
+                        Click="BtnClose_Click"
+                        ToolTipService.ToolTip="Cerrar nota (Alt+F4)"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Padding="6,4">
+                        <FontIcon Glyph="&#xE8BB;" FontSize="12" Foreground="{ThemeResource AppIconBrush}"/>
+                </Button>
+            </StackPanel>
+        </Grid>
+
+        <!-- CUERPO PRINCIPAL: EDITOR DE TEXTO ENRIQUECIDO -->
+        <RichEditBox x:Name="EditorBox"
+                     Grid.Row="1"
+                     Margin="8,4,8,4"
+                     BorderThickness="0"
+                      Foreground="{ThemeResource AppTextBrush}"
+                     TextWrapping="Wrap"
+                     AcceptsReturn="True"
+                     FontSize="14"
+                     FontFamily="Segoe UI Variable Text, Segoe UI"
+                     TextChanged="EditorBox_TextChanged"/>
+
+        <!-- BARRA INFERIOR: FORMATO Y ESTADO DE SYNC -->
+        <Grid Grid.Row="2" Padding="8,2" BorderThickness="0,1,0,0" BorderBrush="{ThemeResource AppDividerBrush}">
+            <Grid.ColumnDefinitions>
+                <ColumnDefinition Width="*"/>
+                <ColumnDefinition Width="Auto"/>
+            </Grid.ColumnDefinitions>
+
+            <!-- Herramientas de formato básico -->
+            <StackPanel Grid.Column="0" Orientation="Horizontal" Spacing="2">
+                <ToggleButton x:Name="BtnBold" Click="BtnBold_Click" ToolTipService.ToolTip="Negrita (Ctrl+B)" Background="Transparent" BorderThickness="0" Padding="5,3">
+                    <FontIcon Glyph="&#xE8DD;" FontSize="12"/>
+                </ToggleButton>
+                <ToggleButton x:Name="BtnItalic" Click="BtnItalic_Click" ToolTipService.ToolTip="Cursiva (Ctrl+I)" Background="Transparent" BorderThickness="0" Padding="5,3">
+                    <FontIcon Glyph="&#xE8DB;" FontSize="12"/>
+                </ToggleButton>
+                <ToggleButton x:Name="BtnUnderline" Click="BtnUnderline_Click" ToolTipService.ToolTip="Subrayado (Ctrl+U)" Background="Transparent" BorderThickness="0" Padding="5,3">
+                    <FontIcon Glyph="&#xE8DC;" FontSize="12"/>
+                </ToggleButton>
+                <ToggleButton x:Name="BtnStrikethrough" Click="BtnStrikethrough_Click" ToolTipService.ToolTip="Tachado (Ctrl+T)" Background="Transparent" BorderThickness="0" Padding="5,3">
+                    <FontIcon Glyph="&#xEDE0;" FontSize="12"/>
+                </ToggleButton>
+                <Button x:Name="BtnBullets" Click="BtnBullets_Click" ToolTipService.ToolTip="Lista con viñetas" Background="Transparent" BorderThickness="0" Padding="5,3">
+                    <FontIcon Glyph="&#xE8FD;" FontSize="12"/>
+                </Button>
+            </StackPanel>
+
+            <!-- Indicador de Sincronización -->
+            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center" Spacing="6">
+                    <FontIcon x:Name="IconSync" Glyph="&#xE753;" FontSize="11" Foreground="{ThemeResource AppSecondaryTextBrush}"/>
+                    <TextBlock x:Name="TxtSyncStatus" Text="Guardado local" FontSize="10" Foreground="{ThemeResource AppSecondaryTextBrush}" VerticalAlignment="Center"/>
+            </StackPanel>
+        </Grid>
+    </Grid>
+</Window>

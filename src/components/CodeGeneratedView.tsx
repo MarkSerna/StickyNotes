@@ -1,5 +1,6 @@
 import React, { useState } from 'react';
-import { FileCode, Copy, Check, Terminal, Database, ShieldAlert } from 'lucide-react';
+import { FileCode, Copy, Check, Terminal, Database, ShieldAlert, Download, FolderArchive, HelpCircle, Loader2 } from 'lucide-react';
+import { generateAndDownloadSolutionZip } from '../utils/solutionExporter';
 
 interface CodeFile {
   path: string;
@@ -372,7 +373,8 @@ public interface INoteRepository
     Task RestoreFromTrashAsync(Guid id);
     Task PermanentDeleteAsync(Guid id);
     Task<List<Note>> GetPendingSyncNotesAsync();
-    Task MarkAsSyncedAsync(Guid id, DateTime syncTime);
+    Task<List<Note>> GetAllNotesIncludingDeletedAsync();
+    Task MarkAsSyncedAsync(Guid id, DateTime? syncTime = null);
 }
 
 public class SqliteNoteRepository : INoteRepository
@@ -476,7 +478,14 @@ public class SqliteNoteRepository : INoteRepository
             .ToListAsync();
     }
 
-    public async Task MarkAsSyncedAsync(Guid id, DateTime syncTime)
+    public async Task<List<Note>> GetAllNotesIncludingDeletedAsync()
+    {
+        return await _context.Notes
+            .IgnoreQueryFilters()
+            .ToListAsync();
+    }
+
+    public async Task MarkAsSyncedAsync(Guid id, DateTime? syncTime = null)
     {
         var note = await _context.Notes
             .IgnoreQueryFilters()
@@ -963,7 +972,6 @@ export const GENERATED_STEP4_FILES: CodeFile[] = [
                 CornerRadius="6,0,0,6"
                 Background="#33000000"
                 PointerEntered="PeekingHandle_PointerEntered"
-                Cursor="Hand"
                 ToolTipService.ToolTip="Pasa el cursor o haz clic para abrir Notas">
             <FontIcon Glyph="&#xE76C;" FontSize="10" Foreground="White" HorizontalAlignment="Center"/>
         </Border>
@@ -2591,6 +2599,7 @@ export const CodeGeneratedView: React.FC = () => {
   const [activeStep, setActiveStep] = useState<2 | 3 | 4 | 5 | 6 | 7>(7);
   const [selectedFileIndex, setSelectedFileIndex] = useState(0);
   const [copied, setCopied] = useState(false);
+  const [isExportingZip, setIsExportingZip] = useState(false);
 
   let fileList = GENERATED_STEP2_FILES;
   if (activeStep === 3) fileList = GENERATED_STEP3_FILES;
@@ -2607,8 +2616,60 @@ export const CodeGeneratedView: React.FC = () => {
     setTimeout(() => setCopied(false), 2000);
   };
 
+  const handleDownloadZip = async () => {
+    try {
+      setIsExportingZip(true);
+      await generateAndDownloadSolutionZip();
+    } catch (err) {
+      console.error('Error generating solution ZIP:', err);
+    } finally {
+      setIsExportingZip(false);
+    }
+  };
+
   return (
     <div className="bg-slate-900 border border-slate-800 rounded-xl overflow-hidden shadow-2xl">
+      {/* Visual Studio 2022 Quick Alert / Helper Banner */}
+      <div className="bg-gradient-to-r from-blue-950/90 via-slate-900 to-indigo-950/80 border-b border-blue-900/60 p-4">
+        <div className="flex flex-col md:flex-row md:items-center justify-between gap-3">
+          <div className="flex items-start gap-3">
+            <div className="p-2 bg-blue-600/20 border border-blue-500/30 rounded-lg text-blue-400 shrink-0 mt-0.5">
+              <FolderArchive className="w-5 h-5" />
+            </div>
+            <div>
+              <h4 className="text-sm font-semibold text-slate-100 flex items-center gap-2">
+                ¿Por qué no aparece nada en la ventana "Abrir proyecto o solución"?
+                <span className="text-[10px] bg-blue-500/20 text-blue-300 px-2 py-0.5 rounded border border-blue-500/30 font-mono">
+                  Visual Studio 2022
+                </span>
+              </h4>
+              <p className="text-xs text-slate-300 mt-1 max-w-3xl leading-relaxed">
+                Visual Studio busca archivos con extensión <span className="font-mono text-amber-300 bg-slate-950 px-1 py-0.5 rounded">.sln</span> o <span className="font-mono text-amber-300 bg-slate-950 px-1 py-0.5 rounded">.csproj</span>. La carpeta que tienes en el explorador (<code className="text-slate-200">public/</code>, <code className="text-slate-200">src/</code>) corresponde al prototipo web. 
+                Descarga el archivo <span className="text-emerald-400 font-semibold font-mono">StickyNotes.sln</span> con el botón derecho para abrirlo directamente en Visual Studio.
+              </p>
+            </div>
+          </div>
+
+          <button
+            onClick={handleDownloadZip}
+            disabled={isExportingZip}
+            className="shrink-0 flex items-center justify-center gap-2 bg-blue-600 hover:bg-blue-500 text-white font-medium text-xs px-4 py-2.5 rounded-lg shadow-lg shadow-blue-600/30 transition-all border border-blue-400/40 disabled:opacity-50 active:scale-95"
+          >
+            {isExportingZip ? (
+              <>
+                <Loader2 className="w-4 h-4 animate-spin text-white" />
+                <span>Generando ZIP...</span>
+              </>
+            ) : (
+              <>
+                <Download className="w-4 h-4 text-white" />
+                <span>Descargar Solución .zip (StickyNotes.sln)</span>
+              </>
+            )}
+          </button>
+        </div>
+      </div>
+
       {/* Top Banner with Step Switcher */}
       <div className="bg-slate-800/80 px-4 py-3 border-b border-slate-700/80 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
