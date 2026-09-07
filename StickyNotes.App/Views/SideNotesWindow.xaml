@@ -36,6 +36,9 @@
               BorderBrush="#1E293B"
               PointerEntered="ExpandedPanel_PointerEntered"
               PointerExited="ExpandedPanel_PointerExited">
+            <Grid.RenderTransform>
+                <TranslateTransform x:Name="PanelTransform" X="0"/>
+            </Grid.RenderTransform>
             <Grid.ColumnDefinitions>
                 <!-- Tira de borde con píldoras de colores -->
                 <ColumnDefinition Width="18"/>
