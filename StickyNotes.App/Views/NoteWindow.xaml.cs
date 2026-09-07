@@ -227,6 +227,12 @@ public sealed partial class NoteWindow : Window
         await _repository.UpdateAsync(_note);
     }
 
+    private async void BtnExport_Click(object sender, RoutedEventArgs e)
+    {
+        var hWnd = WindowNative.GetWindowHandle(this);
+        await ExportHelper.ExportNoteToMarkdownAsync(_note, hWnd);
+    }
+
     private async void BtnDelete_Click(object sender, RoutedEventArgs e)
     {
         await _repository.SoftDeleteAsync(_note.Id);

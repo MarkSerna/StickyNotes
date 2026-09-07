@@ -82,6 +82,16 @@
                     </Button.Flyout>
                 </Button>
 
+                <!-- Exportar Nota a Markdown -->
+                <Button x:Name="BtnExport"
+                        Click="BtnExport_Click"
+                        ToolTipService.ToolTip="Exportar nota a Markdown (.md)"
+                        Background="Transparent"
+                        BorderThickness="0"
+                        Padding="6,4">
+                        <FontIcon Glyph="&#xEDE1;" FontSize="12" Foreground="{ThemeResource AppIconBrush}"/>
+                </Button>
+
                 <!-- Eliminar Nota -->
                 <Button x:Name="BtnDelete"
                         Click="BtnDelete_Click"
