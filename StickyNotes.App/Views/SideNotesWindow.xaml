@@ -8,23 +8,24 @@
     mc:Ignorable="d"
     Title="Panel Lateral de Notas">
 
-    <Grid x:Name="RootLayout" RequestedTheme="Dark" Background="Transparent">
-        <!-- FRANJA DE REPOSO (PEEKING HANDLE) CUANDO ESTÁ COLAPSADO (Imagen 2) -->
+    <Grid x:Name="RootLayout" RequestedTheme="Dark" Background="{x:Null}">
+        <!-- PÍLDORA FLOTANTE COMPACTA EN EL BORDE CUANDO ESTÁ COLAPSADO (Solo donde están las notas) -->
         <Border x:Name="PeekingHandle"
-                Width="18"
+                Width="16"
                 HorizontalAlignment="Right"
-                VerticalAlignment="Stretch"
+                VerticalAlignment="Center"
                 CornerRadius="8,0,0,8"
-                Background="#D90F172A"
+                Background="#E60F172A"
                 BorderThickness="1,1,0,1"
                 BorderBrush="#334155"
                 PointerEntered="PeekingHandle_PointerEntered"
                 PointerPressed="PeekingHandle_PointerPressed"
-                ToolTipService.ToolTip="Pasa el cursor o haz clic para desplegar Notas">
+                ToolTipService.ToolTip="Notas rápidas (Pasa el cursor o haz clic)">
             <StackPanel x:Name="PeekingPillsStack"
                         VerticalAlignment="Center"
                         HorizontalAlignment="Center"
-                        Spacing="4"/>
+                        Spacing="4"
+                        Margin="0,4"/>
         </Border>
 
         <!-- CONTENEDOR PRINCIPAL DEL PANEL LATERAL EXPANDIDO (Imagen 3) -->

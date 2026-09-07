@@ -38,10 +38,14 @@ public sealed partial class SideNotesWindow : Window
     private bool _isExpanded = true;
     private bool _isTrashMode = false;
     private const int ExpandedWidth = 480;
-    private const int CollapsedWidth = 18;
+    private const int CollapsedWidth = 16;
+    private int _collapsedHeight = 84;
 
-    private Storyboard? _currentStoryboard;
-    private bool _isAnimating = false;
+    private readonly DispatcherTimer _animTimer;
+    private readonly System.Diagnostics.Stopwatch _animStopwatch = new();
+    private int _animStartWidth;
+    private int _animTargetWidth;
+    private bool _animExpanding;
 
     private readonly List<Note> _allLoadedNotes = new();
     public ObservableCollection<Note> Notes { get; } = new();
@@ -62,6 +66,10 @@ public sealed partial class SideNotesWindow : Window
         _presenter.IsAlwaysOnTop = true;
         _presenter.IsResizable = false;
         _presenter.SetBorderAndTitleBar(false, false);
+
+        // Timer para animación fluida a ~80fps
+        _animTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(12) };
+        _animTimer.Tick += AnimTimer_Tick;
 
         // Ajustar al área de trabajo del monitor principal
         PositionToMonitorEdge();
@@ -85,163 +93,101 @@ public sealed partial class SideNotesWindow : Window
         _ = LoadNotesAsync();
     }
 
-    private void PositionToMonitorEdge()
+    private void PositionToCollapsedEdge()
     {
         var workArea = MonitorHelper.GetPrimaryMonitorWorkArea();
-        var width = _isExpanded ? ExpandedWidth : CollapsedWidth;
+        var y = workArea.Y + (workArea.Height - _collapsedHeight) / 2;
+        var x = _isRightEdge ? (workArea.X + workArea.Width - CollapsedWidth) : workArea.X;
+        _appWindow.MoveAndResize(new RectInt32(x, y, CollapsedWidth, _collapsedHeight));
+    }
+
+    private void PositionToMonitorEdge()
+    {
+        if (!_isExpanded)
+        {
+            PositionToCollapsedEdge();
+            return;
+        }
+
+        var workArea = MonitorHelper.GetPrimaryMonitorWorkArea();
         var height = workArea.Height;
         var y = workArea.Y;
-        var x = _isRightEdge ? (workArea.X + workArea.Width - width) : workArea.X;
-
-        _appWindow.MoveAndResize(new RectInt32(x, y, width, height));
+        var x = _isRightEdge ? (workArea.X + workArea.Width - ExpandedWidth) : workArea.X;
+        _appWindow.MoveAndResize(new RectInt32(x, y, ExpandedWidth, height));
     }
 
     private void SetExpanded(bool expand, bool animate = true)
     {
         if (!animate)
         {
-            _currentStoryboard?.Stop();
+            _animTimer.Stop();
             _isExpanded = expand;
             ExpandedPanel.Visibility = expand ? Visibility.Visible : Visibility.Collapsed;
-            ExpandedPanel.Opacity = expand ? 1.0 : 0.0;
-            PanelTransform.X = 0;
             PeekingHandle.Visibility = expand ? Visibility.Collapsed : Visibility.Visible;
-            PeekingHandle.Opacity = expand ? 0.0 : 1.0;
             PositionToMonitorEdge();
             return;
         }
 
-        AnimateExpansion(expand);
-    }
-
-    private void AnimateExpansion(bool expand)
-    {
-        _currentStoryboard?.Stop();
+        _animTimer.Stop();
+        _animExpanding = expand;
+        _isExpanded = expand;
 
         var workArea = MonitorHelper.GetPrimaryMonitorWorkArea();
         var height = workArea.Height;
         var y = workArea.Y;
-        var hiddenX = _isRightEdge ? (ExpandedWidth - CollapsedWidth) : -(ExpandedWidth - CollapsedWidth);
 
         if (expand)
         {
-            _isExpanded = true;
-
-            // 1. Ampliar el tamaño de la ventana de inmediato para permitir que se dibuje el panel
-            var targetX = _isRightEdge ? (workArea.X + workArea.Width - ExpandedWidth) : workArea.X;
-            _appWindow.MoveAndResize(new RectInt32(targetX, y, ExpandedWidth, height));
-
             ExpandedPanel.Visibility = Visibility.Visible;
-            PeekingHandle.Visibility = Visibility.Visible;
+            PeekingHandle.Visibility = Visibility.Collapsed;
 
-            var startX = _isAnimating ? PanelTransform.X : hiddenX;
-            var startOpacity = _isAnimating ? ExpandedPanel.Opacity : 0.0;
+            _animStartWidth = _appWindow.Size.Width < ExpandedWidth ? Math.Max(CollapsedWidth, _appWindow.Size.Width) : CollapsedWidth;
+            _animTargetWidth = ExpandedWidth;
 
-            var sb = new Storyboard();
+            var startX = _isRightEdge ? (workArea.X + workArea.Width - _animStartWidth) : workArea.X;
+            _appWindow.MoveAndResize(new RectInt32(startX, y, _animStartWidth, height));
 
-            // Desplazamiento X: de startX a 0 (CubicEaseOut)
-            var animX = new DoubleAnimation
-            {
-                From = startX,
-                To = 0,
-                Duration = TimeSpan.FromMilliseconds(260),
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-            };
-            Storyboard.SetTarget(animX, PanelTransform);
-            Storyboard.SetTargetProperty(animX, "X");
-            sb.Children.Add(animX);
-
-            // Fundido de entrada (Fade in) del panel
-            var animOpacity = new DoubleAnimation
-            {
-                From = startOpacity,
-                To = 1.0,
-                Duration = TimeSpan.FromMilliseconds(220),
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-            };
-            Storyboard.SetTarget(animOpacity, ExpandedPanel);
-            Storyboard.SetTargetProperty(animOpacity, "Opacity");
-            sb.Children.Add(animOpacity);
-
-            // Desvanecimiento (Fade out) del peeking handle
-            var animPeeking = new DoubleAnimation
-            {
-                From = PeekingHandle.Opacity,
-                To = 0.0,
-                Duration = TimeSpan.FromMilliseconds(180),
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut }
-            };
-            Storyboard.SetTarget(animPeeking, PeekingHandle);
-            Storyboard.SetTargetProperty(animPeeking, "Opacity");
-            sb.Children.Add(animPeeking);
-
-            sb.Completed += (s, e) =>
-            {
-                PeekingHandle.Visibility = Visibility.Collapsed;
-                _isAnimating = false;
-            };
-
-            _isAnimating = true;
-            _currentStoryboard = sb;
-            sb.Begin();
+            _animStopwatch.Restart();
+            _animTimer.Start();
         }
         else
         {
-            PeekingHandle.Visibility = Visibility.Visible;
+            _animStartWidth = _appWindow.Size.Width;
+            _animTargetWidth = CollapsedWidth;
 
-            var startX = PanelTransform.X;
-            var startOpacity = ExpandedPanel.Opacity;
+            _animStopwatch.Restart();
+            _animTimer.Start();
+        }
+    }
 
-            var sb = new Storyboard();
+    private void AnimTimer_Tick(object? sender, object e)
+    {
+        var elapsed = _animStopwatch.Elapsed.TotalMilliseconds;
+        var duration = _animExpanding ? 220.0 : 180.0;
+        var t = Math.Min(1.0, elapsed / duration);
 
-            // Deslizamiento X hacia afuera: de startX a hiddenX (CubicEaseIn)
-            var animX = new DoubleAnimation
-            {
-                From = startX,
-                To = hiddenX,
-                Duration = TimeSpan.FromMilliseconds(220),
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn }
-            };
-            Storyboard.SetTarget(animX, PanelTransform);
-            Storyboard.SetTargetProperty(animX, "X");
-            sb.Children.Add(animX);
+        var ease = _animExpanding
+            ? 1.0 - Math.Pow(1.0 - t, 3)
+            : Math.Pow(t, 2.5);
 
-            // Fundido de salida (Fade out) del panel
-            var animOpacity = new DoubleAnimation
-            {
-                From = startOpacity,
-                To = 0.0,
-                Duration = TimeSpan.FromMilliseconds(200),
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn }
-            };
-            Storyboard.SetTarget(animOpacity, ExpandedPanel);
-            Storyboard.SetTargetProperty(animOpacity, "Opacity");
-            sb.Children.Add(animOpacity);
+        var currentWidth = (int)(_animStartWidth + (_animTargetWidth - _animStartWidth) * ease);
+        var workArea = MonitorHelper.GetPrimaryMonitorWorkArea();
+        var height = workArea.Height;
+        var y = workArea.Y;
+        var currentX = _isRightEdge ? (workArea.X + workArea.Width - currentWidth) : workArea.X;
 
-            // Aparición (Fade in) del peeking handle
-            var animPeeking = new DoubleAnimation
-            {
-                From = PeekingHandle.Opacity,
-                To = 1.0,
-                Duration = TimeSpan.FromMilliseconds(220),
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseIn }
-            };
-            Storyboard.SetTarget(animPeeking, PeekingHandle);
-            Storyboard.SetTargetProperty(animPeeking, "Opacity");
-            sb.Children.Add(animPeeking);
+        _appWindow.MoveAndResize(new RectInt32(currentX, y, currentWidth, height));
 
-            sb.Completed += (s, e) =>
+        if (t >= 1.0)
+        {
+            _animTimer.Stop();
+            if (!_animExpanding)
             {
                 _isExpanded = false;
                 ExpandedPanel.Visibility = Visibility.Collapsed;
-                var x = _isRightEdge ? (workArea.X + workArea.Width - CollapsedWidth) : workArea.X;
-                _appWindow.MoveAndResize(new RectInt32(x, y, CollapsedWidth, height));
-                _isAnimating = false;
-            };
-
-            _isAnimating = true;
-            _currentStoryboard = sb;
-            sb.Begin();
+                PeekingHandle.Visibility = Visibility.Visible;
+                PositionToCollapsedEdge();
+            }
         }
     }
 
@@ -250,7 +196,7 @@ public sealed partial class SideNotesWindow : Window
         PeekingPillsStack.Children.Clear();
         ExpandedPillsStack.Children.Clear();
 
-        var displayNotes = _allLoadedNotes.Take(12);
+        var displayNotes = _allLoadedNotes.Take(6).ToList();
         foreach (var note in displayNotes)
         {
             var palette = ColorHelper.GetPalette(note.Color);
@@ -258,22 +204,31 @@ public sealed partial class SideNotesWindow : Window
             var pill1 = new Border
             {
                 Width = 4,
-                Height = 18,
+                Height = 16,
                 CornerRadius = new CornerRadius(2),
                 Background = palette.HeaderBrush,
-                Margin = new Thickness(0, 1, 0, 1)
+                Margin = new Thickness(0, 1.5, 0, 1.5)
             };
             PeekingPillsStack.Children.Add(pill1);
 
             var pill2 = new Border
             {
                 Width = 4,
-                Height = 18,
+                Height = 16,
                 CornerRadius = new CornerRadius(2),
                 Background = palette.HeaderBrush,
-                Margin = new Thickness(0, 1, 0, 1)
+                Margin = new Thickness(0, 1.5, 0, 1.5)
             };
             ExpandedPillsStack.Children.Add(pill2);
+        }
+
+        var count = Math.Max(2, displayNotes.Count);
+        _collapsedHeight = Math.Clamp(count * 20 + 18, 56, 160);
+        PeekingHandle.Height = _collapsedHeight;
+
+        if (!_isExpanded && !_animExpanding)
+        {
+            PositionToCollapsedEdge();
         }
     }
 
