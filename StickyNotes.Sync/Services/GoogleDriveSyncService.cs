@@ -24,12 +24,15 @@ public record SyncReport(int Uploaded, int Downloaded, int Deleted, bool IsSucce
 public class GoogleDriveSyncService
 {
     private readonly IServiceScopeFactory _scopeFactory;
-    private readonly string _clientId;
-    private readonly string _clientSecret;
+    private string _clientId;
+    private string _clientSecret;
     private DriveService? _driveService;
     private readonly SemaphoreSlim _syncLock = new(1, 1);
 
     public bool IsAuthenticated => _driveService != null;
+    public string ClientId => _clientId;
+    public string ClientSecret => _clientSecret;
+    public event Action<bool>? AuthStatusChanged;
 
     public GoogleDriveSyncService(IServiceScopeFactory scopeFactory, string clientId, string clientSecret)
     {
@@ -38,12 +41,41 @@ public class GoogleDriveSyncService
         _clientSecret = clientSecret;
     }
 
+    public void UpdateCredentials(string clientId, string clientSecret)
+    {
+        _clientId = clientId;
+        _clientSecret = clientSecret;
+        _driveService = null;
+        AuthStatusChanged?.Invoke(false);
+    }
+
+    public async Task DisconnectAsync()
+    {
+        try
+        {
+            var dataStore = new WindowsCredentialDataStore("StickyNotesApp");
+            await dataStore.ClearAsync();
+            _driveService = null;
+            AuthStatusChanged?.Invoke(false);
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[GoogleDriveSync] Error al desconectar: {ex.Message}");
+        }
+    }
+
     /// <summary>
     /// Inicia el flujo OAuth 2.0 InstalledAppFlow y persiste tokens cifrados en DPAPI.
     /// Solo solicita acceso a drive.appdata (carpeta oculta sin acceso a archivos personales).
     /// </summary>
     public async Task<bool> AuthenticateAsync(CancellationToken cancellationToken = default)
     {
+        if (string.IsNullOrWhiteSpace(_clientId) || string.IsNullOrWhiteSpace(_clientSecret))
+        {
+            AuthStatusChanged?.Invoke(false);
+            return false;
+        }
+
         try
         {
             var secrets = new ClientSecrets
@@ -68,10 +100,12 @@ public class GoogleDriveSyncService
                 ApplicationName = "StickyNotes Windows 11"
             });
 
+            AuthStatusChanged?.Invoke(true);
             return true;
         }
         catch (Exception)
         {
+            AuthStatusChanged?.Invoke(false);
             return false;
         }
     }

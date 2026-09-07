@@ -40,7 +40,8 @@ public class WindowManager
                 _syncScheduler,
                 onNewNoteRequested: () => dispatcherQueue.TryEnqueue(() => _ = CreateAndOpenNewNoteFloatingAsync()),
                 onToggleSidePanelRequested: () => dispatcherQueue.TryEnqueue(ToggleSideNotes),
-                onShowAllFloatingRequested: () => dispatcherQueue.TryEnqueue(() => _ = ShowAllFloatingNotesAsync())
+                onShowAllFloatingRequested: () => dispatcherQueue.TryEnqueue(() => _ = ShowAllFloatingNotesAsync()),
+                onOpenSettingsRequested: () => dispatcherQueue.TryEnqueue(OpenSettingsDialog)
             );
         }
         catch (Exception ex)
@@ -174,6 +175,21 @@ public class WindowManager
 
         _sideNotesScope?.Dispose();
         _sideNotesScope = null;
+    }
+
+    public void OpenSettingsDialog()
+    {
+        EnsureSideNotesWindow();
+        if (_sideNotesWindow != null)
+        {
+            _sideNotesWindow.Activate();
+            var syncService = App.Services.GetRequiredService<GoogleDriveSyncService>();
+            var dialog = new SettingsDialog(syncService, _syncScheduler)
+            {
+                XamlRoot = _sideNotesWindow.Content.XamlRoot
+            };
+            _ = dialog.ShowAsync();
+        }
     }
 
     public void Shutdown()

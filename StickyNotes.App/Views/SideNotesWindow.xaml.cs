@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.Linq;
 using System.Threading.Tasks;
+using Microsoft.Extensions.DependencyInjection;
 using Microsoft.UI;
 using Microsoft.UI.Text;
 using Microsoft.UI.Windowing;
@@ -13,6 +14,7 @@ using ColorHelper = StickyNotes.App.Helpers.ColorHelper;
 using StickyNotes.Core.Enums;
 using StickyNotes.Core.Models;
 using StickyNotes.Data.Repositories;
+using StickyNotes.Sync.Services;
 using Windows.Graphics;
 using WinRT.Interop;
 using StickyNotes.App.Services;
@@ -370,6 +372,17 @@ public sealed partial class SideNotesWindow : Window
         _allLoadedNotes.Insert(0, created);
         Notes.Insert(0, created);
         NotesTabList.SelectedIndex = 0;
+    }
+
+    private async void BtnSettings_Click(object sender, RoutedEventArgs e)
+    {
+        var syncService = App.Services.GetRequiredService<GoogleDriveSyncService>();
+        var syncScheduler = App.Services.GetRequiredService<SyncScheduler>();
+        var dialog = new SettingsDialog(syncService, syncScheduler)
+        {
+            XamlRoot = this.Content.XamlRoot
+        };
+        await dialog.ShowAsync();
     }
 
     #endregion

@@ -15,17 +15,20 @@ public class TrayIconService : IDisposable
     private readonly Action _onNewNoteRequested;
     private readonly Action _onToggleSidePanelRequested;
     private readonly Action _onShowAllFloatingRequested;
+    private readonly Action? _onOpenSettingsRequested;
 
     public TrayIconService(
         SyncScheduler syncScheduler,
         Action onNewNoteRequested,
         Action onToggleSidePanelRequested,
-        Action onShowAllFloatingRequested)
+        Action onShowAllFloatingRequested,
+        Action? onOpenSettingsRequested = null)
     {
         _syncScheduler = syncScheduler;
         _onNewNoteRequested = onNewNoteRequested;
         _onToggleSidePanelRequested = onToggleSidePanelRequested;
         _onShowAllFloatingRequested = onShowAllFloatingRequested;
+        _onOpenSettingsRequested = onOpenSettingsRequested;
 
         InitializeTrayIcon();
     }
@@ -95,6 +98,13 @@ public class TrayIconService : IDisposable
             StartupService.SetRunAtStartup(itemStartup.IsChecked);
         };
         menu.Items.Add(itemStartup);
+
+        if (_onOpenSettingsRequested != null)
+        {
+            var itemSettings = new MenuFlyoutItem { Text = "Configuración de Google Drive..." };
+            itemSettings.Click += (s, e) => _onOpenSettingsRequested();
+            menu.Items.Add(itemSettings);
+        }
 
         menu.Items.Add(new MenuFlyoutSeparator());
 

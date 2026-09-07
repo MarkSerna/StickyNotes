@@ -80,6 +80,11 @@
                         <FontIcon Glyph="&#xE737;" FontSize="12"/>
                     </Button>
 
+                    <!-- Configuración Google Drive -->
+                    <Button Click="BtnSettings_Click" ToolTipService.ToolTip="Configuración de sincronización" Background="Transparent" BorderThickness="0" Padding="6">
+                        <FontIcon Glyph="&#xE713;" FontSize="12"/>
+                    </Button>
+
                     <!-- Colapsar panel -->
                     <Button Click="BtnCollapse_Click" ToolTipService.ToolTip="Ocultar panel lateral" Background="Transparent" BorderThickness="0" Padding="6">
                         <FontIcon Glyph="&#xE76C;" FontSize="12"/>
