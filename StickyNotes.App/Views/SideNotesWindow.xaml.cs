@@ -55,9 +55,10 @@ public sealed partial class SideNotesWindow : Window
 
     private bool _isAnimating = false;
     private bool _animExpanding = false;
-    private int _animStartX;
-    private int _animTargetX;
+    private int _animStartWidth;
+    private int _animTargetWidth;
     private int _animY;
+    private int _animHeight;
     private double _animDurationMs;
     private readonly System.Diagnostics.Stopwatch _animStopwatch = new();
 
@@ -170,10 +171,8 @@ public sealed partial class SideNotesWindow : Window
         var fullHeight = workArea.Height;
         var y = workArea.Y;
         _animY = y;
+        _animHeight = fullHeight;
 
-        var closedX = _isRightEdge 
-            ? (workArea.X + workArea.Width - CollapsedWidth) 
-            : (workArea.X - ExpandedWidth + CollapsedWidth);
         var openedX = _isRightEdge 
             ? (workArea.X + workArea.Width - ExpandedWidth) 
             : workArea.X;
@@ -203,20 +202,20 @@ public sealed partial class SideNotesWindow : Window
             ExpandedPanel.Visibility = Visibility.Visible;
             PeekingHandle.Visibility = Visibility.Collapsed;
 
-            _animStartX = _appWindow.Position.X;
-            // Asegurar que la ventana tenga el tamaño completo y esté en la posición de entrada inicial
-            if (_animStartX == 0 || _appWindow.Size.Width != ExpandedWidth || _appWindow.Size.Height != fullHeight)
+            _animStartWidth = _appWindow.Size.Width;
+            if (_animStartWidth <= CollapsedWidth || _appWindow.Size.Height != fullHeight)
             {
-                _animStartX = closedX;
-                _appWindow.MoveAndResize(new RectInt32(closedX, y, ExpandedWidth, fullHeight));
+                _animStartWidth = CollapsedWidth;
+                var startX = _isRightEdge ? (workArea.X + workArea.Width - CollapsedWidth) : workArea.X;
+                _appWindow.MoveAndResize(new RectInt32(startX, y, CollapsedWidth, fullHeight));
             }
-            _animTargetX = openedX;
+            _animTargetWidth = ExpandedWidth;
             _animDurationMs = 280.0;
         }
         else
         {
-            _animStartX = _appWindow.Position.X;
-            _animTargetX = closedX;
+            _animStartWidth = _appWindow.Size.Width;
+            _animTargetWidth = CollapsedWidth;
             _animDurationMs = 220.0;
         }
 
@@ -239,8 +238,15 @@ public sealed partial class SideNotesWindow : Window
             ? 1.0 - Math.Pow(1.0 - t, 4)
             : Math.Pow(t, 3);
 
-        var currentX = (int)Math.Round(_animStartX + (_animTargetX - _animStartX) * progress);
-        _appWindow.Move(new PointInt32(currentX, _animY));
+        var currentWidth = (int)Math.Round(_animStartWidth + (_animTargetWidth - _animStartWidth) * progress);
+        currentWidth = Math.Clamp(currentWidth, CollapsedWidth, ExpandedWidth);
+
+        var workArea = GetActiveWorkArea();
+        var currentX = _isRightEdge 
+            ? (workArea.X + workArea.Width - currentWidth) 
+            : workArea.X;
+
+        _appWindow.MoveAndResize(new RectInt32(currentX, _animY, currentWidth, _animHeight));
 
         if (t >= 1.0)
         {
@@ -253,6 +259,11 @@ public sealed partial class SideNotesWindow : Window
                 ExpandedPanel.Visibility = Visibility.Collapsed;
                 PeekingHandle.Visibility = Visibility.Visible;
                 PositionToCollapsedEdge();
+            }
+            else
+            {
+                var finalX = _isRightEdge ? (workArea.X + workArea.Width - ExpandedWidth) : workArea.X;
+                _appWindow.MoveAndResize(new RectInt32(finalX, _animY, ExpandedWidth, _animHeight));
             }
         }
     }
@@ -593,8 +604,8 @@ public sealed partial class SideNotesWindow : Window
             PeekingHandle.CornerRadius = new CornerRadius(8, 0, 0, 8);
             PeekingHandle.BorderThickness = new Thickness(1, 1, 0, 1);
 
-            // Panel expandido: anclado a la derecha
-            ExpandedPanel.HorizontalAlignment = HorizontalAlignment.Right;
+            // Panel expandido: anclado a la izquierda dentro del ancho animado para guiar la entrada desde el borde
+            ExpandedPanel.HorizontalAlignment = HorizontalAlignment.Left;
             ExpandedPanel.BorderThickness = new Thickness(1, 0, 0, 0);
 
             Col0.Width = new GridLength(18);
@@ -621,8 +632,8 @@ public sealed partial class SideNotesWindow : Window
             PeekingHandle.CornerRadius = new CornerRadius(0, 8, 8, 0);
             PeekingHandle.BorderThickness = new Thickness(0, 1, 1, 1);
 
-            // Panel expandido: anclado a la izquierda
-            ExpandedPanel.HorizontalAlignment = HorizontalAlignment.Left;
+            // Panel expandido: anclado a la derecha dentro del ancho animado para guiar la entrada desde el borde
+            ExpandedPanel.HorizontalAlignment = HorizontalAlignment.Right;
             ExpandedPanel.BorderThickness = new Thickness(0, 0, 1, 0);
 
             Col0.Width = new GridLength(140);
