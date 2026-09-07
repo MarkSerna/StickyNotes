@@ -61,11 +61,17 @@
             <!-- COLUMNA PRINCIPAL: EDITOR DE LA NOTA SELECCIONADA -->
             <Grid Grid.Column="1" Margin="8,8,6,8">
                 <!-- TARJETA ESTILO STICKY NOTE IDÉNTICA AL MODO FLOTANTE -->
-                <Grid x:Name="ActiveNoteCard" CornerRadius="12" BorderThickness="1" BorderBrush="#00000020">
+                <Grid x:Name="ActiveNoteCard"
+                      CornerRadius="12"
+                      BorderThickness="1"
+                      BorderBrush="#00000020"
+                      VerticalAlignment="Top"
+                      Height="340">
                     <Grid.RowDefinitions>
                         <RowDefinition Height="36"/>
                         <RowDefinition Height="*"/>
                         <RowDefinition Height="34"/>
+                        <RowDefinition Height="12"/>
                     </Grid.RowDefinitions>
 
                     <!-- Cabecera de la Nota en el Panel Lateral -->
@@ -132,6 +138,14 @@
                                                     <TextBlock Text="Exportar a Markdown" FontSize="11"/>
                                                 </StackPanel>
                                             </Button>
+                                            <MenuFlyoutSeparator Margin="0,2"/>
+                                            <TextBlock Text="GRADUAR TAMAÑO" FontSize="9" FontWeight="Bold" Foreground="#64748B" CharacterSpacing="80"/>
+                                            <Grid ColumnDefinitions="*,*,*,*" Margin="0,2">
+                                                <Button Grid.Column="0" Content="260" ToolTipService.ToolTip="Compacto (260 px)" FontSize="10" Click="SetNoteSize_Click" Tag="260" Padding="0" Height="24" HorizontalAlignment="Stretch" Margin="1,0"/>
+                                                <Button Grid.Column="1" Content="340" ToolTipService.ToolTip="Mediano (340 px)" FontSize="10" Click="SetNoteSize_Click" Tag="340" Padding="0" Height="24" HorizontalAlignment="Stretch" Margin="1,0"/>
+                                                <Button Grid.Column="2" Content="500" ToolTipService.ToolTip="Grande (500 px)" FontSize="10" Click="SetNoteSize_Click" Tag="500" Padding="0" Height="24" HorizontalAlignment="Stretch" Margin="1,0"/>
+                                                <Button Grid.Column="3" Content="Max" ToolTipService.ToolTip="Pantalla completa" FontSize="10" Click="SetNoteSize_Click" Tag="0" Padding="0" Height="24" HorizontalAlignment="Stretch" Margin="1,0"/>
+                                            </Grid>
                                         </StackPanel>
                                     </Flyout>
                                 </Button.Flyout>
@@ -195,6 +209,26 @@
                                    VerticalAlignment="Center"
                                    Margin="0,0,6,0"/>
                     </Grid>
+
+                    <!-- Manija de redimensionamiento para graduar el tamaño vertical de la nota -->
+                    <Border x:Name="ResizeGrip"
+                            Grid.Row="3"
+                            Height="12"
+                            Background="Transparent"
+                            VerticalAlignment="Bottom"
+                            HorizontalAlignment="Stretch"
+                            PointerPressed="ResizeGrip_PointerPressed"
+                            PointerMoved="ResizeGrip_PointerMoved"
+                            PointerReleased="ResizeGrip_PointerReleased"
+                            PointerCanceled="ResizeGrip_PointerReleased"
+                            ToolTipService.ToolTip="Arrastra para graduar la altura de la nota">
+                        <Border Width="36"
+                                Height="3"
+                                CornerRadius="1.5"
+                                Background="#00000030"
+                                HorizontalAlignment="Center"
+                                VerticalAlignment="Center"/>
+                    </Border>
                 </Grid>
             </Grid>
 
@@ -272,7 +306,7 @@
                                                    TextTrimming="CharacterEllipsis"/>
                                     </StackPanel>
                                     <TextBlock Grid.Row="1"
-                                               Text="{x:Bind Content, Mode=OneWay}"
+                                               Text="{x:Bind PreviewText, Mode=OneWay}"
                                                FontSize="9"
                                                Foreground="#94A3B8"
                                                TextTrimming="CharacterEllipsis"

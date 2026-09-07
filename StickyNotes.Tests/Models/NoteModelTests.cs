@@ -82,4 +82,32 @@ public class NoteModelTests
         var note = new Note { Color = color };
         note.ColorHex.Should().Be(expectedHex);
     }
+
+    [Fact]
+    public void PreviewText_WhenContentContainsRtf_StripsTagsAndReturnsCleanPlainText()
+    {
+        var rtf = @"{\rtf1\fbidis\ansi\ansicpg1252\deff0\nouicompat\deflang9226{\fonttbl{\f0\fnil Segoe UI;}}\fs20 ujghvohvouy\par}";
+        var note = new Note { Content = rtf };
+
+        note.PreviewText.Should().Be("ujghvohvouy");
+    }
+
+    [Fact]
+    public void PropertyChanged_WhenTitleOrContentModified_RaisesEvent()
+    {
+        var note = new Note();
+        var raisedProperties = new System.Collections.Generic.List<string?>();
+        note.PropertyChanged += (s, e) => raisedProperties.Add(e.PropertyName);
+
+        note.Title = "Nuevo Titulo";
+        note.Content = "Nuevo Contenido";
+        note.Color = NoteColor.Blue;
+
+        raisedProperties.Should().Contain(nameof(Note.Title));
+        raisedProperties.Should().Contain(nameof(Note.DisplayTitle));
+        raisedProperties.Should().Contain(nameof(Note.Content));
+        raisedProperties.Should().Contain(nameof(Note.PreviewText));
+        raisedProperties.Should().Contain(nameof(Note.Color));
+        raisedProperties.Should().Contain(nameof(Note.ColorHex));
+    }
 }

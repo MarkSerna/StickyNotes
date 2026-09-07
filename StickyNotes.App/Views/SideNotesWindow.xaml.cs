@@ -196,6 +196,11 @@ public sealed partial class SideNotesWindow : Window
 
             ApplyActiveNoteColor(selectedNote.Color);
 
+            // Graduar tamaño vertical predeterminado
+            var targetHeight = selectedNote.Height > 100 ? selectedNote.Height : 340.0;
+            ActiveNoteCard.VerticalAlignment = VerticalAlignment.Top;
+            ActiveNoteCard.Height = Math.Min(targetHeight, Math.Max(260, ExpandedPanel.ActualHeight > 200 ? ExpandedPanel.ActualHeight - 24 : 700));
+
             // Estado de sincronización
             IconActiveSync.Glyph = selectedNote.SyncStatus == SyncStatus.Synced ? "\uE753" : "\uE898";
 
@@ -307,13 +312,8 @@ public sealed partial class SideNotesWindow : Window
         _currentNote.Content = rtf;
 
         await _repository.UpdateAsync(_currentNote);
-
-        var index = Notes.IndexOf(_currentNote);
-        if (index >= 0)
-        {
-            Notes[index] = _currentNote;
-            NotesTabList.SelectedIndex = index;
-        }
+        // Nota: Al implementar INotifyPropertyChanged en Note, los cambios de título y
+        // previsualización se propagan automáticamente al ListView sin parpadeos ni recreación de contenedores.
     }
 
     #endregion
@@ -339,14 +339,6 @@ public sealed partial class SideNotesWindow : Window
             UpdatePeekingPills();
 
             await _repository.UpdateAsync(_currentNote);
-
-            // Refrescar lista para actualizar el bullet
-            var index = Notes.IndexOf(_currentNote);
-            if (index >= 0)
-            {
-                Notes[index] = _currentNote;
-                NotesTabList.SelectedIndex = index;
-            }
         }
     }
 
@@ -453,6 +445,80 @@ public sealed partial class SideNotesWindow : Window
 
     private void BtnChecklist_Click(object sender, RoutedEventArgs e) =>
         ActiveNoteEditor.Document.Selection.TypeText("☑ ");
+
+    #endregion
+
+    #region Redimensionamiento y Graduación de Tamaño de Nota
+
+    private bool _isResizingNote = false;
+    private double _resizeStartY;
+    private double _resizeStartHeight;
+
+    private void ResizeGrip_PointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        _isResizingNote = true;
+        var pt = e.GetCurrentPoint(ExpandedPanel);
+        _resizeStartY = pt.Position.Y;
+        _resizeStartHeight = ActiveNoteCard.ActualHeight > 0 ? ActiveNoteCard.ActualHeight : (ActiveNoteCard.Height > 0 ? ActiveNoteCard.Height : 340);
+        (sender as UIElement)?.CapturePointer(e.Pointer);
+        e.Handled = true;
+    }
+
+    private void ResizeGrip_PointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_isResizingNote) return;
+
+        var pt = e.GetCurrentPoint(ExpandedPanel);
+        var deltaY = pt.Position.Y - _resizeStartY;
+        var maxHeight = Math.Max(260, ExpandedPanel.ActualHeight > 200 ? ExpandedPanel.ActualHeight - 24 : 800);
+        var newHeight = Math.Clamp(_resizeStartHeight + deltaY, 180, maxHeight);
+
+        ActiveNoteCard.VerticalAlignment = VerticalAlignment.Top;
+        ActiveNoteCard.Height = newHeight;
+        if (_currentNote != null)
+        {
+            _currentNote.Height = newHeight;
+        }
+        e.Handled = true;
+    }
+
+    private async void ResizeGrip_PointerReleased(object sender, PointerRoutedEventArgs e)
+    {
+        if (_isResizingNote)
+        {
+            _isResizingNote = false;
+            (sender as UIElement)?.ReleasePointerCapture(e.Pointer);
+            e.Handled = true;
+
+            if (_currentNote != null)
+            {
+                await _repository.UpdateAsync(_currentNote);
+            }
+        }
+    }
+
+    private async void SetNoteSize_Click(object sender, RoutedEventArgs e)
+    {
+        if (_currentNote == null || sender is not FrameworkElement fe) return;
+        if (double.TryParse(fe.Tag?.ToString(), out var targetSize))
+        {
+            if (targetSize <= 0)
+            {
+                // Pantalla completa
+                ActiveNoteCard.VerticalAlignment = VerticalAlignment.Stretch;
+                ActiveNoteCard.Height = double.NaN;
+                _currentNote.Height = Math.Max(600, ExpandedPanel.ActualHeight - 24);
+            }
+            else
+            {
+                ActiveNoteCard.VerticalAlignment = VerticalAlignment.Top;
+                ActiveNoteCard.Height = targetSize;
+                _currentNote.Height = targetSize;
+            }
+
+            await _repository.UpdateAsync(_currentNote);
+        }
+    }
 
     #endregion
 }
