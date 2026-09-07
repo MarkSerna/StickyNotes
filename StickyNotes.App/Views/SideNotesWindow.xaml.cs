@@ -41,11 +41,13 @@ public sealed partial class SideNotesWindow : Window
     private const int CollapsedWidth = 16;
     private int _collapsedHeight = 84;
 
-    private readonly DispatcherTimer _animTimer;
+    private bool _isAnimating = false;
+    private bool _animExpanding = false;
+    private int _animStartX;
+    private int _animTargetX;
+    private int _animY;
+    private double _animDurationMs;
     private readonly System.Diagnostics.Stopwatch _animStopwatch = new();
-    private int _animStartWidth;
-    private int _animTargetWidth;
-    private bool _animExpanding;
 
     private readonly List<Note> _allLoadedNotes = new();
     public ObservableCollection<Note> Notes { get; } = new();
@@ -66,10 +68,6 @@ public sealed partial class SideNotesWindow : Window
         _presenter.IsAlwaysOnTop = true;
         _presenter.IsResizable = false;
         _presenter.SetBorderAndTitleBar(false, false);
-
-        // Timer para animación fluida a ~80fps
-        _animTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(12) };
-        _animTimer.Tick += AnimTimer_Tick;
 
         // Ajustar al área de trabajo del monitor principal
         PositionToMonitorEdge();
@@ -118,69 +116,93 @@ public sealed partial class SideNotesWindow : Window
 
     private void SetExpanded(bool expand, bool animate = true)
     {
+        if (_isAnimating)
+        {
+            CompositionTarget.Rendering -= OnCompositionRendering;
+            _isAnimating = false;
+        }
+
+        var workArea = MonitorHelper.GetPrimaryMonitorWorkArea();
+        var fullHeight = workArea.Height;
+        var y = workArea.Y;
+        _animY = y;
+
+        var closedX = _isRightEdge 
+            ? (workArea.X + workArea.Width - CollapsedWidth) 
+            : (workArea.X - ExpandedWidth + CollapsedWidth);
+        var openedX = _isRightEdge 
+            ? (workArea.X + workArea.Width - ExpandedWidth) 
+            : workArea.X;
+
         if (!animate)
         {
-            _animTimer.Stop();
             _isExpanded = expand;
             ExpandedPanel.Visibility = expand ? Visibility.Visible : Visibility.Collapsed;
             PeekingHandle.Visibility = expand ? Visibility.Collapsed : Visibility.Visible;
-            PositionToMonitorEdge();
+
+            if (expand)
+            {
+                _appWindow.MoveAndResize(new RectInt32(openedX, y, ExpandedWidth, fullHeight));
+            }
+            else
+            {
+                PositionToCollapsedEdge();
+            }
             return;
         }
 
-        _animTimer.Stop();
         _animExpanding = expand;
         _isExpanded = expand;
-
-        var workArea = MonitorHelper.GetPrimaryMonitorWorkArea();
-        var height = workArea.Height;
-        var y = workArea.Y;
 
         if (expand)
         {
             ExpandedPanel.Visibility = Visibility.Visible;
             PeekingHandle.Visibility = Visibility.Collapsed;
 
-            _animStartWidth = _appWindow.Size.Width < ExpandedWidth ? Math.Max(CollapsedWidth, _appWindow.Size.Width) : CollapsedWidth;
-            _animTargetWidth = ExpandedWidth;
-
-            var startX = _isRightEdge ? (workArea.X + workArea.Width - _animStartWidth) : workArea.X;
-            _appWindow.MoveAndResize(new RectInt32(startX, y, _animStartWidth, height));
-
-            _animStopwatch.Restart();
-            _animTimer.Start();
+            _animStartX = _appWindow.Position.X;
+            // Asegurar que la ventana tenga el tamaño completo y esté en la posición de entrada inicial
+            if (_animStartX == 0 || _appWindow.Size.Width != ExpandedWidth || _appWindow.Size.Height != fullHeight)
+            {
+                _animStartX = closedX;
+                _appWindow.MoveAndResize(new RectInt32(closedX, y, ExpandedWidth, fullHeight));
+            }
+            _animTargetX = openedX;
+            _animDurationMs = 280.0;
         }
         else
         {
-            _animStartWidth = _appWindow.Size.Width;
-            _animTargetWidth = CollapsedWidth;
-
-            _animStopwatch.Restart();
-            _animTimer.Start();
+            _animStartX = _appWindow.Position.X;
+            _animTargetX = closedX;
+            _animDurationMs = 220.0;
         }
+
+        _animStopwatch.Restart();
+        _isAnimating = true;
+        CompositionTarget.Rendering += OnCompositionRendering;
     }
 
-    private void AnimTimer_Tick(object? sender, object e)
+    private void OnCompositionRendering(object? sender, object e)
     {
+        if (!_isAnimating) return;
+
         var elapsed = _animStopwatch.Elapsed.TotalMilliseconds;
-        var duration = _animExpanding ? 220.0 : 180.0;
-        var t = Math.Min(1.0, elapsed / duration);
+        var t = Math.Min(1.0, elapsed / _animDurationMs);
 
-        var ease = _animExpanding
-            ? 1.0 - Math.Pow(1.0 - t, 3)
-            : Math.Pow(t, 2.5);
+        // Curvas Fluent Design:
+        // Apertura: Quartic Ease-Out (arranque vivo y desaceleración sedosa)
+        // Cierre: Cubic Ease-In (aceleración limpia de salida)
+        var progress = _animExpanding
+            ? 1.0 - Math.Pow(1.0 - t, 4)
+            : Math.Pow(t, 3);
 
-        var currentWidth = (int)(_animStartWidth + (_animTargetWidth - _animStartWidth) * ease);
-        var workArea = MonitorHelper.GetPrimaryMonitorWorkArea();
-        var height = workArea.Height;
-        var y = workArea.Y;
-        var currentX = _isRightEdge ? (workArea.X + workArea.Width - currentWidth) : workArea.X;
-
-        _appWindow.MoveAndResize(new RectInt32(currentX, y, currentWidth, height));
+        var currentX = (int)Math.Round(_animStartX + (_animTargetX - _animStartX) * progress);
+        _appWindow.Move(new PointInt32(currentX, _animY));
 
         if (t >= 1.0)
         {
-            _animTimer.Stop();
+            CompositionTarget.Rendering -= OnCompositionRendering;
+            _isAnimating = false;
+
             if (!_animExpanding)
             {
                 _isExpanded = false;
