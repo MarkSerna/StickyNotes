@@ -32,7 +32,6 @@ public sealed partial class SideNotesWindow : Window
     private readonly AppWindow _appWindow;
     private readonly OverlappedPresenter _presenter;
     private readonly DispatcherTimer _autoHideTimer;
-    private readonly DispatcherTimer _debounceTimer;
 
     private Note? _currentNote;
     private bool _isPinned = false;
@@ -61,8 +60,6 @@ public sealed partial class SideNotesWindow : Window
     private int _animHeight;
     private double _animDurationMs;
     private readonly System.Diagnostics.Stopwatch _animStopwatch = new();
-
-    private double _userManualHeight = 0;
 
     private readonly List<Note> _allLoadedNotes = new();
     public ObservableCollection<Note> Notes { get; } = new();
@@ -112,10 +109,6 @@ public sealed partial class SideNotesWindow : Window
                 SetExpanded(false);
             }
         };
-
-        // Timer de debounce de 500ms para persistencia en SQLite
-        _debounceTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
-        _debounceTimer.Tick += DebounceTimer_Tick;
 
         // Cargar notas desde SQLite
         _ = LoadNotesAsync();
@@ -327,6 +320,7 @@ public sealed partial class SideNotesWindow : Window
     private void ApplyFilter(string? query)
     {
         Notes.Clear();
+        NotesCardsStack.Children.Clear();
         var filter = query?.Trim();
 
         var matched = string.IsNullOrWhiteSpace(filter)
@@ -338,6 +332,8 @@ public sealed partial class SideNotesWindow : Window
         foreach (var note in matched)
         {
             Notes.Add(note);
+            var card = CreateNoteCardControl(note);
+            NotesCardsStack.Children.Add(card);
         }
 
         NotesTabList.ItemsSource = Notes;
@@ -348,8 +344,59 @@ public sealed partial class SideNotesWindow : Window
         else
         {
             _currentNote = null;
-            TxtActiveNoteTitle.Text = string.Empty;
-            ActiveNoteEditor.Document.SetText(TextSetOptions.None, string.Empty);
+        }
+    }
+
+    private NoteCardControl CreateNoteCardControl(Note note)
+    {
+        var card = new NoteCardControl();
+        card.Initialize(note, _repository, _isTrashMode);
+
+        card.CardFocused += (s, n) =>
+        {
+            _currentNote = n;
+            if (NotesTabList.SelectedItem != n)
+            {
+                NotesTabList.SelectedItem = n;
+            }
+            HighlightSelectedCard(n.Id);
+        };
+
+        card.DeleteRequested += async (s, n) =>
+        {
+            await HandleDeleteNoteAsync(n);
+        };
+
+        card.DuplicateRequested += async (s, n) =>
+        {
+            await HandleDuplicateNoteAsync(n);
+        };
+
+        card.FloatRequested += (s, n) =>
+        {
+            AppManager.Instance.OpenNoteAsFloating(n);
+        };
+
+        card.NoteUpdated += (s, n) =>
+        {
+            UpdatePeekingPills();
+        };
+
+        return card;
+    }
+
+    private void HighlightSelectedCard(Guid noteId)
+    {
+        foreach (var child in NotesCardsStack.Children.OfType<NoteCardControl>())
+        {
+            if (child.Note?.Id == noteId)
+            {
+                child.HighlightCard();
+            }
+            else
+            {
+                child.UnhighlightCard();
+            }
         }
     }
 
@@ -363,75 +410,17 @@ public sealed partial class SideNotesWindow : Window
         if (NotesTabList.SelectedItem is Note selectedNote)
         {
             _currentNote = selectedNote;
-            TxtActiveNoteTitle.Text = selectedNote.Title ?? string.Empty;
+            HighlightSelectedCard(selectedNote.Id);
 
-            try
+            var targetCard = NotesCardsStack.Children.OfType<NoteCardControl>()
+                .FirstOrDefault(c => c.Note?.Id == selectedNote.Id);
+
+            if (targetCard != null)
             {
-                ActiveNoteEditor.Document.SetText(TextSetOptions.FormatRtf, selectedNote.Content ?? string.Empty);
-            }
-            catch
-            {
-                ActiveNoteEditor.Document.SetText(TextSetOptions.None, selectedNote.Content ?? string.Empty);
-            }
-
-            ApplyActiveNoteColor(selectedNote.Color);
-
-            // Graduar y auto-ajustar altura dinámica según el contenido de la nota (iniciando compacta y expandiéndose progresivamente)
-            _userManualHeight = 0;
-            AutoFitNoteHeight();
-            ActiveNoteEditor.Document.Selection.SetRange(0, 0);
-
-            // Estado de sincronización
-            IconActiveSync.Glyph = selectedNote.SyncStatus == SyncStatus.Synced ? "\uE753" : "\uE898";
-
-            // En modo papelera el editor es de solo lectura
-            ActiveNoteEditor.IsReadOnly = _isTrashMode;
-            TxtActiveNoteTitle.IsReadOnly = _isTrashMode;
-        }
-    }
-
-    private void ApplyActiveNoteColor(NoteColor color)
-    {
-        var palette = ColorHelper.GetPalette(color);
-        ActiveNoteCard.Background = palette.BodyBrush;
-        ActiveNoteCard.BorderBrush = palette.BorderBrush;
-        NoteHeaderBar.Background = palette.HeaderBrush;
-        ActiveNoteFooter.BorderBrush = palette.BorderBrush;
-
-        TxtActiveNoteTitle.Foreground = palette.ForegroundBrush;
-        ActiveNoteEditor.Foreground = palette.ForegroundBrush;
-        ActiveNoteEditor.Background = palette.BodyBrush;
-        TxtActiveAutoSave.Foreground = palette.ForegroundBrush;
-
-        try
-        {
-            var sel = ActiveNoteEditor.Document.Selection;
-            ActiveNoteEditor.Document.GetText(TextGetOptions.None, out var allText);
-            if (!string.IsNullOrEmpty(allText))
-            {
-                sel.SetRange(0, allText.Length);
-                sel.CharacterFormat.ForegroundColor = ((SolidColorBrush)palette.ForegroundBrush).Color;
-                sel.CharacterFormat.BackgroundColor = Colors.Transparent;
-                sel.SetRange(0, 0);
-            }
-            else
-            {
-                sel.CharacterFormat.ForegroundColor = ((SolidColorBrush)palette.ForegroundBrush).Color;
-                sel.CharacterFormat.BackgroundColor = Colors.Transparent;
-                sel.SetRange(0, 0);
+                targetCard.StartBringIntoView();
+                targetCard.FocusEditor();
             }
         }
-        catch { }
-
-        IconActiveSync.Foreground = palette.ForegroundBrush;
-        IconActiveMore.Foreground = palette.ForegroundBrush;
-        IconActiveDelete.Foreground = palette.ForegroundBrush;
-
-        IconActiveBold.Foreground = palette.ForegroundBrush;
-        IconActiveItalic.Foreground = palette.ForegroundBrush;
-        IconActiveUnderline.Foreground = palette.ForegroundBrush;
-        IconActiveStrikethrough.Foreground = palette.ForegroundBrush;
-        IconActiveChecklist.Foreground = palette.ForegroundBrush;
     }
 
     #region Auto-ocultado, Hover y Arrastre (Drag & Drop) entre bordes y pantallas
@@ -618,7 +607,7 @@ public sealed partial class SideNotesWindow : Window
             Grid.SetColumn(ExpandedPillsBorder, 0);
             ExpandedPillsBorder.BorderThickness = new Thickness(0, 0, 1, 0);
 
-            Grid.SetColumn(ActiveNoteContainer, 1);
+            Grid.SetColumn(NotesScrollViewer, 1);
 
             Grid.SetColumn(NotesSidebarContainer, 2);
             NotesSidebarContainer.BorderThickness = new Thickness(1, 0, 0, 0);
@@ -646,7 +635,7 @@ public sealed partial class SideNotesWindow : Window
             Grid.SetColumn(NotesSidebarContainer, 0);
             NotesSidebarContainer.BorderThickness = new Thickness(0, 0, 1, 0);
 
-            Grid.SetColumn(ActiveNoteContainer, 1);
+            Grid.SetColumn(NotesScrollViewer, 1);
 
             Grid.SetColumn(ExpandedPillsBorder, 2);
             ExpandedPillsBorder.BorderThickness = new Thickness(1, 0, 0, 0);
@@ -717,111 +706,6 @@ public sealed partial class SideNotesWindow : Window
 
     #endregion
 
-    #region Edición y Debounce de Nota
-
-    private void TxtActiveNoteTitle_TextChanged(object sender, TextChangedEventArgs e)
-    {
-        if (_currentNote == null || _isTrashMode) return;
-        _debounceTimer.Stop();
-        _debounceTimer.Start();
-    }
-
-    private void ActiveNoteEditor_TextChanged(object sender, RoutedEventArgs e)
-    {
-        if (_currentNote == null || _isTrashMode) return;
-
-        // Auto-extender o contraer la altura de la tarjeta de nota poco a poco conforme el usuario escribe
-        AutoFitNoteHeight();
-
-        _debounceTimer.Stop();
-        _debounceTimer.Start();
-    }
-
-    private int CalculateContentLineCount(string text)
-    {
-        if (string.IsNullOrEmpty(text))
-            return 1;
-
-        var cleanText = text.TrimEnd('\r', '\n');
-        if (string.IsNullOrEmpty(cleanText))
-            return 1;
-
-        var rawLines = cleanText.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
-        int totalLines = 0;
-
-        foreach (var line in rawLines)
-        {
-            if (line.Length == 0)
-            {
-                totalLines += 1;
-            }
-            else
-            {
-                // En ancho útil de ~260px con fuente Segoe UI 13pt caben aprox 36 caracteres por línea
-                totalLines += Math.Max(1, (int)Math.Ceiling(line.Length / 36.0));
-            }
-        }
-
-        if (text.EndsWith('\r') || text.EndsWith('\n'))
-        {
-            totalLines += 1;
-        }
-
-        return Math.Max(1, totalLines);
-    }
-
-    private void AutoFitNoteHeight()
-    {
-        if (_currentNote == null || _isTrashMode) return;
-
-        // Si la nota fue fijada a pantalla completa (Stretch), no sobreescribir con altura fija
-        if (ActiveNoteCard.VerticalAlignment == VerticalAlignment.Stretch)
-        {
-            return;
-        }
-
-        ActiveNoteEditor.Document.GetText(TextGetOptions.None, out var text);
-
-        var lineCount = CalculateContentLineCount(text);
-
-        // Cada línea ocupa ~20px en Segoe UI 13pt
-        var textHeight = lineCount * 20.0;
-
-        // Elementos fijos de la tarjeta: Cabecera (38px) + Footer (34px) + Grip (12px) + Padding y márgenes (20px) = 104px
-        var totalNeeded = textHeight + 104.0;
-
-        // Altura máxima disponible en el panel lateral sin desbordar la pantalla
-        var availableMax = ExpandedPanel.ActualHeight > 200 
-            ? Math.Max(260.0, ExpandedPanel.ActualHeight - 28.0) 
-            : 850.0;
-
-        // Altura mínima base compacta (200px), o la definida manualmente por el usuario si la ajustó
-        var minHeight = _userManualHeight > 180 ? _userManualHeight : 200.0;
-
-        var targetHeight = Math.Clamp(totalNeeded, minHeight, availableMax);
-
-        ActiveNoteCard.VerticalAlignment = VerticalAlignment.Top;
-        ActiveNoteCard.Height = targetHeight;
-        _currentNote.Height = targetHeight;
-    }
-
-    private async void DebounceTimer_Tick(object? sender, object e)
-    {
-        _debounceTimer.Stop();
-        if (_currentNote == null || _isTrashMode) return;
-
-        _currentNote.Title = string.IsNullOrWhiteSpace(TxtActiveNoteTitle.Text) ? null : TxtActiveNoteTitle.Text.Trim();
-        ActiveNoteEditor.Document.GetText(TextGetOptions.FormatRtf, out var rtf);
-        _currentNote.Content = rtf;
-        _currentNote.Height = ActiveNoteCard.Height;
-
-        await _repository.UpdateAsync(_currentNote);
-        // Nota: Al implementar INotifyPropertyChanged en Note, los cambios de título y
-        // previsualización se propagan automáticamente al ListView sin parpadeos ni recreación de contenedores.
-    }
-
-    #endregion
-
     #region Acciones de Papelera y Modos
 
     private async void BtnToggleTrash_Click(object sender, RoutedEventArgs e)
@@ -832,59 +716,7 @@ public sealed partial class SideNotesWindow : Window
 
     #endregion
 
-    #region Opciones de la Nota Activa (Menú)
-
-    private async void SetColor_Click(object sender, RoutedEventArgs e)
-    {
-        if (_currentNote != null && sender is FrameworkElement fe && Enum.TryParse<NoteColor>(fe.Tag?.ToString(), out var color))
-        {
-            _currentNote.Color = color;
-            ApplyActiveNoteColor(color);
-            UpdatePeekingPills();
-
-            await _repository.UpdateAsync(_currentNote);
-        }
-    }
-
-    private async void BtnDeleteActiveNote_Click(object sender, RoutedEventArgs e)
-    {
-        if (_currentNote == null) return;
-        await _repository.SoftDeleteAsync(_currentNote.Id);
-        _allLoadedNotes.Remove(_currentNote);
-        Notes.Remove(_currentNote);
-        UpdatePeekingPills();
-
-        _currentNote = Notes.FirstOrDefault();
-        if (_currentNote != null)
-        {
-            NotesTabList.SelectedItem = _currentNote;
-        }
-    }
-
-    private async void BtnDuplicateSingleNote_Click(object sender, RoutedEventArgs e)
-    {
-        if (_currentNote == null) return;
-        var duplicate = new Note
-        {
-            Title = _currentNote.Title != null ? $"{_currentNote.Title} (copia)" : "Copia de nota",
-            Content = _currentNote.Content,
-            Color = _currentNote.Color,
-            PositionX = _currentNote.PositionX + 30,
-            PositionY = _currentNote.PositionY + 30
-        };
-
-        var created = await _repository.CreateAsync(duplicate);
-        _allLoadedNotes.Insert(0, created);
-        Notes.Insert(0, created);
-        UpdatePeekingPills();
-        NotesTabList.SelectedIndex = 0;
-    }
-
-    private void BtnFloatSingleNote_Click(object sender, RoutedEventArgs e)
-    {
-        if (_currentNote == null) return;
-        AppManager.Instance.OpenNoteAsFloating(_currentNote);
-    }
+    #region Gestión y Operaciones de Notas Apiladas
 
     private async void BtnNewNote_Click(object sender, RoutedEventArgs e)
     {
@@ -906,13 +738,65 @@ public sealed partial class SideNotesWindow : Window
         _allLoadedNotes.Insert(0, created);
         Notes.Insert(0, created);
         UpdatePeekingPills();
-        NotesTabList.SelectedIndex = 0;
 
-        _userManualHeight = 0;
-        AutoFitNoteHeight();
-        ActiveNoteEditor.Document.SetText(TextSetOptions.None, string.Empty);
-        ActiveNoteEditor.Document.Selection.SetRange(0, 0);
-        ActiveNoteEditor.Focus(FocusState.Programmatic);
+        var card = CreateNoteCardControl(created);
+        NotesCardsStack.Children.Insert(0, card);
+
+        NotesTabList.SelectedIndex = 0;
+        _currentNote = created;
+        HighlightSelectedCard(created.Id);
+        card.StartBringIntoView();
+        card.FocusEditor();
+    }
+
+    private async Task HandleDeleteNoteAsync(Note note)
+    {
+        await _repository.SoftDeleteAsync(note.Id);
+        _allLoadedNotes.Remove(note);
+        Notes.Remove(note);
+
+        var cardToRemove = NotesCardsStack.Children.OfType<NoteCardControl>()
+            .FirstOrDefault(c => c.Note?.Id == note.Id);
+        if (cardToRemove != null)
+        {
+            NotesCardsStack.Children.Remove(cardToRemove);
+        }
+
+        UpdatePeekingPills();
+
+        _currentNote = Notes.FirstOrDefault();
+        if (_currentNote != null)
+        {
+            NotesTabList.SelectedItem = _currentNote;
+            HighlightSelectedCard(_currentNote.Id);
+        }
+    }
+
+    private async Task HandleDuplicateNoteAsync(Note note)
+    {
+        var duplicate = new Note
+        {
+            Title = note.Title != null ? $"{note.Title} (copia)" : "Copia de nota",
+            Content = note.Content,
+            Color = note.Color,
+            PositionX = note.PositionX + 30,
+            PositionY = note.PositionY + 30,
+            Height = note.Height
+        };
+
+        var created = await _repository.CreateAsync(duplicate);
+        _allLoadedNotes.Insert(0, created);
+        Notes.Insert(0, created);
+        UpdatePeekingPills();
+
+        var card = CreateNoteCardControl(created);
+        NotesCardsStack.Children.Insert(0, card);
+
+        NotesTabList.SelectedIndex = 0;
+        _currentNote = created;
+        HighlightSelectedCard(created.Id);
+        card.StartBringIntoView();
+        card.FocusEditor();
     }
 
     private async void BtnSettings_Click(object sender, RoutedEventArgs e)
@@ -925,115 +809,6 @@ public sealed partial class SideNotesWindow : Window
             XamlRoot = this.Content.XamlRoot
         };
         await dialog.ShowAsync();
-    }
-
-    #endregion
-
-    #region Exportación a Markdown y JSON
-
-    private async void BtnExportActiveMarkdown_Click(object sender, RoutedEventArgs e)
-    {
-        if (_currentNote == null) return;
-        var hWnd = WindowNative.GetWindowHandle(this);
-        await ExportHelper.ExportNoteToMarkdownAsync(_currentNote, hWnd);
-    }
-
-    #endregion
-
-    #region Formato Rápido
-
-    private void BtnBold_Click(object sender, RoutedEventArgs e) =>
-        ActiveNoteEditor.Document.Selection.CharacterFormat.Bold = FormatEffect.Toggle;
-
-    private void BtnItalic_Click(object sender, RoutedEventArgs e) =>
-        ActiveNoteEditor.Document.Selection.CharacterFormat.Italic = FormatEffect.Toggle;
-
-    private void BtnUnderline_Click(object sender, RoutedEventArgs e) =>
-        ActiveNoteEditor.Document.Selection.CharacterFormat.Underline =
-            ActiveNoteEditor.Document.Selection.CharacterFormat.Underline == UnderlineType.None ? UnderlineType.Single : UnderlineType.None;
-
-    private void BtnStrikethrough_Click(object sender, RoutedEventArgs e) =>
-        ActiveNoteEditor.Document.Selection.CharacterFormat.Strikethrough = FormatEffect.Toggle;
-
-    private void BtnChecklist_Click(object sender, RoutedEventArgs e) =>
-        ActiveNoteEditor.Document.Selection.TypeText("☑ ");
-
-    #endregion
-
-    #region Redimensionamiento y Graduación de Tamaño de Nota
-
-    private bool _isResizingNote = false;
-    private double _resizeStartY;
-    private double _resizeStartHeight;
-
-    private void ResizeGrip_PointerPressed(object sender, PointerRoutedEventArgs e)
-    {
-        _isResizingNote = true;
-        var pt = e.GetCurrentPoint(ExpandedPanel);
-        _resizeStartY = pt.Position.Y;
-        _resizeStartHeight = ActiveNoteCard.ActualHeight > 0 ? ActiveNoteCard.ActualHeight : (ActiveNoteCard.Height > 0 ? ActiveNoteCard.Height : 340);
-        (sender as UIElement)?.CapturePointer(e.Pointer);
-        e.Handled = true;
-    }
-
-    private void ResizeGrip_PointerMoved(object sender, PointerRoutedEventArgs e)
-    {
-        if (!_isResizingNote) return;
-
-        var pt = e.GetCurrentPoint(ExpandedPanel);
-        var deltaY = pt.Position.Y - _resizeStartY;
-        var maxHeight = Math.Max(260, ExpandedPanel.ActualHeight > 200 ? ExpandedPanel.ActualHeight - 24 : 800);
-        var newHeight = Math.Clamp(_resizeStartHeight + deltaY, 180, maxHeight);
-
-        _userManualHeight = newHeight;
-        ActiveNoteCard.VerticalAlignment = VerticalAlignment.Top;
-        ActiveNoteCard.Height = newHeight;
-        if (_currentNote != null)
-        {
-            _currentNote.Height = newHeight;
-        }
-        e.Handled = true;
-    }
-
-    private async void ResizeGrip_PointerReleased(object sender, PointerRoutedEventArgs e)
-    {
-        if (_isResizingNote)
-        {
-            _isResizingNote = false;
-            (sender as UIElement)?.ReleasePointerCapture(e.Pointer);
-            e.Handled = true;
-
-            if (_currentNote != null)
-            {
-                await _repository.UpdateAsync(_currentNote);
-            }
-        }
-    }
-
-    private async void SetNoteSize_Click(object sender, RoutedEventArgs e)
-    {
-        if (_currentNote == null || sender is not FrameworkElement fe) return;
-        if (double.TryParse(fe.Tag?.ToString(), out var targetSize))
-        {
-            if (targetSize <= 0)
-            {
-                // Pantalla completa
-                _userManualHeight = 0;
-                ActiveNoteCard.VerticalAlignment = VerticalAlignment.Stretch;
-                ActiveNoteCard.Height = double.NaN;
-                _currentNote.Height = Math.Max(600, ExpandedPanel.ActualHeight - 24);
-            }
-            else
-            {
-                _userManualHeight = targetSize;
-                ActiveNoteCard.VerticalAlignment = VerticalAlignment.Top;
-                ActiveNoteCard.Height = targetSize;
-                _currentNote.Height = targetSize;
-                AutoFitNoteHeight();
-            }
-
-            await _repository.UpdateAsync(_currentNote);
-        }
     }
 
     #endregion

@@ -8,6 +8,8 @@ public class AppManager
     public static AppManager Instance { get; } = new AppManager();
     private WindowManager? _windowManager;
 
+    public Views.SideNotesWindow? SideNotes => _windowManager?.SideNotesWindow;
+
     private AppManager()
     {
     }

@@ -18,6 +18,7 @@ public class WindowManager
     private readonly SyncScheduler _syncScheduler;
     private IServiceScope? _sideNotesScope;
     private SideNotesWindow? _sideNotesWindow;
+    public SideNotesWindow? SideNotesWindow => _sideNotesWindow;
     private readonly Dictionary<Guid, NoteWindow> _floatingWindows = new();
     private TrayIconService? _trayIconService;
     private GlobalHotkeyService? _hotkeyService;
