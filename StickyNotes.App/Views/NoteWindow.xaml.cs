@@ -133,12 +133,13 @@ public sealed partial class NoteWindow : Window
                 sel.SetRange(0, allText.Length);
                 sel.CharacterFormat.ForegroundColor = ((SolidColorBrush)palette.ForegroundBrush).Color;
                 sel.CharacterFormat.BackgroundColor = Colors.Transparent;
-                sel.SetRange(allText.Length, allText.Length);
+                sel.SetRange(0, 0);
             }
             else
             {
                 sel.CharacterFormat.ForegroundColor = ((SolidColorBrush)palette.ForegroundBrush).Color;
                 sel.CharacterFormat.BackgroundColor = Colors.Transparent;
+                sel.SetRange(0, 0);
             }
         }
         catch

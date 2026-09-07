@@ -197,6 +197,8 @@
                              AcceptsReturn="True"
                              FontSize="13"
                              FontFamily="Segoe UI Variable Text, Segoe UI"
+                             VerticalAlignment="Stretch"
+                             VerticalContentAlignment="Top"
                              ScrollViewer.VerticalScrollBarVisibility="Auto"
                              ScrollViewer.HorizontalScrollBarVisibility="Disabled"
                              TextChanged="ActiveNoteEditor_TextChanged">

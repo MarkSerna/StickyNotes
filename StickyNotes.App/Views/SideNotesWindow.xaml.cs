@@ -63,12 +63,6 @@ public sealed partial class SideNotesWindow : Window
     private readonly System.Diagnostics.Stopwatch _animStopwatch = new();
 
     private double _userManualHeight = 0;
-    private readonly TextBlock _measureBlock = new()
-    {
-        FontSize = 13,
-        FontFamily = new Microsoft.UI.Xaml.Media.FontFamily("Segoe UI Variable Text, Segoe UI"),
-        TextWrapping = TextWrapping.Wrap
-    };
 
     private readonly List<Note> _allLoadedNotes = new();
     public ObservableCollection<Note> Notes { get; } = new();
@@ -382,9 +376,10 @@ public sealed partial class SideNotesWindow : Window
 
             ApplyActiveNoteColor(selectedNote.Color);
 
-            // Graduar y auto-ajustar altura dinámica según el contenido de la nota
-            _userManualHeight = selectedNote.Height > 180 ? selectedNote.Height : 0;
+            // Graduar y auto-ajustar altura dinámica según el contenido de la nota (iniciando compacta y expandiéndose progresivamente)
+            _userManualHeight = 0;
             AutoFitNoteHeight();
+            ActiveNoteEditor.Document.Selection.SetRange(0, 0);
 
             // Estado de sincronización
             IconActiveSync.Glyph = selectedNote.SyncStatus == SyncStatus.Synced ? "\uE753" : "\uE898";
@@ -417,12 +412,13 @@ public sealed partial class SideNotesWindow : Window
                 sel.SetRange(0, allText.Length);
                 sel.CharacterFormat.ForegroundColor = ((SolidColorBrush)palette.ForegroundBrush).Color;
                 sel.CharacterFormat.BackgroundColor = Colors.Transparent;
-                sel.SetRange(allText.Length, allText.Length);
+                sel.SetRange(0, 0);
             }
             else
             {
                 sel.CharacterFormat.ForegroundColor = ((SolidColorBrush)palette.ForegroundBrush).Color;
                 sel.CharacterFormat.BackgroundColor = Colors.Transparent;
+                sel.SetRange(0, 0);
             }
         }
         catch { }
@@ -741,6 +737,39 @@ public sealed partial class SideNotesWindow : Window
         _debounceTimer.Start();
     }
 
+    private int CalculateContentLineCount(string text)
+    {
+        if (string.IsNullOrEmpty(text))
+            return 1;
+
+        var cleanText = text.TrimEnd('\r', '\n');
+        if (string.IsNullOrEmpty(cleanText))
+            return 1;
+
+        var rawLines = cleanText.Split(new[] { "\r\n", "\r", "\n" }, StringSplitOptions.None);
+        int totalLines = 0;
+
+        foreach (var line in rawLines)
+        {
+            if (line.Length == 0)
+            {
+                totalLines += 1;
+            }
+            else
+            {
+                // En ancho útil de ~260px con fuente Segoe UI 13pt caben aprox 36 caracteres por línea
+                totalLines += Math.Max(1, (int)Math.Ceiling(line.Length / 36.0));
+            }
+        }
+
+        if (text.EndsWith('\r') || text.EndsWith('\n'))
+        {
+            totalLines += 1;
+        }
+
+        return Math.Max(1, totalLines);
+    }
+
     private void AutoFitNoteHeight()
     {
         if (_currentNote == null || _isTrashMode) return;
@@ -753,48 +782,27 @@ public sealed partial class SideNotesWindow : Window
 
         ActiveNoteEditor.Document.GetText(TextGetOptions.None, out var text);
 
-        // Ancho útil para el texto (ancho del editor menos márgenes internos)
-        var editorWidth = ActiveNoteEditor.ActualWidth > 80 ? ActiveNoteEditor.ActualWidth - 20 : 270.0;
+        var lineCount = CalculateContentLineCount(text);
 
-        var textToMeasure = string.IsNullOrEmpty(text) ? " " : text;
-        // Si termina en salto de línea, asegurar que el cursor en la nueva línea sea contabilizado
-        if (textToMeasure.EndsWith('\r') || textToMeasure.EndsWith('\n'))
-        {
-            textToMeasure += "\u200B";
-        }
+        // Cada línea ocupa ~20px en Segoe UI 13pt
+        var textHeight = lineCount * 20.0;
 
-        _measureBlock.Width = editorWidth;
-        _measureBlock.Text = textToMeasure;
-        _measureBlock.Measure(new Windows.Foundation.Size(editorWidth, double.PositiveInfinity));
-        var textHeight = _measureBlock.DesiredSize.Height;
-
-        // Altura acumulada de elementos fijos:
-        // Cabecera (38px) + Barra inferior (34px) + Grip inferior (12px) + Márgenes y padding (22px) = 106px
-        var totalNeeded = textHeight + 106.0;
+        // Elementos fijos de la tarjeta: Cabecera (38px) + Footer (34px) + Grip (12px) + Padding y márgenes (20px) = 104px
+        var totalNeeded = textHeight + 104.0;
 
         // Altura máxima disponible en el panel lateral sin desbordar la pantalla
         var availableMax = ExpandedPanel.ActualHeight > 200 
-            ? Math.Max(260.0, ExpandedPanel.ActualHeight - 32.0) 
+            ? Math.Max(260.0, ExpandedPanel.ActualHeight - 28.0) 
             : 850.0;
 
-        // Si el usuario configuró una altura base manual superior, respetarla como base mínima
-        var minHeight = _userManualHeight > 180 ? _userManualHeight : 240.0;
+        // Altura mínima base compacta (200px), o la definida manualmente por el usuario si la ajustó
+        var minHeight = _userManualHeight > 180 ? _userManualHeight : 200.0;
 
         var targetHeight = Math.Clamp(totalNeeded, minHeight, availableMax);
 
         ActiveNoteCard.VerticalAlignment = VerticalAlignment.Top;
         ActiveNoteCard.Height = targetHeight;
         _currentNote.Height = targetHeight;
-
-        // Si se llegó al tope máximo disponible en pantalla, mantener visible el cursor
-        if (targetHeight >= availableMax)
-        {
-            try
-            {
-                ActiveNoteEditor.Document.Selection.ScrollIntoView(PointOptions.None);
-            }
-            catch { }
-        }
     }
 
     private async void DebounceTimer_Tick(object? sender, object e)
@@ -891,7 +899,7 @@ public sealed partial class SideNotesWindow : Window
             Title = null,
             Content = string.Empty,
             Color = NoteColor.Yellow,
-            Height = 240.0
+            Height = 200.0
         };
 
         var created = await _repository.CreateAsync(newNote);
@@ -902,6 +910,8 @@ public sealed partial class SideNotesWindow : Window
 
         _userManualHeight = 0;
         AutoFitNoteHeight();
+        ActiveNoteEditor.Document.SetText(TextSetOptions.None, string.Empty);
+        ActiveNoteEditor.Document.Selection.SetRange(0, 0);
         ActiveNoteEditor.Focus(FocusState.Programmatic);
     }
 
