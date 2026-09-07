@@ -69,4 +69,17 @@ public class NoteModelTests
         note.DeletedAt.Should().BeNull();
         note.SyncStatus.Should().Be(SyncStatus.PendingUpload);
     }
+
+    [Theory]
+    [InlineData(NoteColor.Yellow, "#FFF385")]
+    [InlineData(NoteColor.Green, "#D2F8B8")]
+    [InlineData(NoteColor.Pink, "#FFCEE8")]
+    [InlineData(NoteColor.Purple, "#E7DCFF")]
+    [InlineData(NoteColor.Blue, "#CEECFE")]
+    [InlineData(NoteColor.Gray, "#E9ECEF")]
+    public void ColorHex_ReturnsExpectedPastelHexCode(NoteColor color, string expectedHex)
+    {
+        var note = new Note { Color = color };
+        note.ColorHex.Should().Be(expectedHex);
+    }
 }

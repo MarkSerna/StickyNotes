@@ -9,6 +9,7 @@ using Microsoft.UI.Text;
 using Microsoft.UI.Windowing;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
+using Microsoft.UI.Xaml.Input;
 using StickyNotes.App.Helpers;
 using ColorHelper = StickyNotes.App.Helpers.ColorHelper;
 using StickyNotes.Core.Enums;
@@ -34,8 +35,8 @@ public sealed partial class SideNotesWindow : Window
     private bool _isRightEdge = true;
     private bool _isExpanded = true;
     private bool _isTrashMode = false;
-    private const int ExpandedWidth = 400;
-    private const int CollapsedWidth = 14;
+    private const int ExpandedWidth = 480;
+    private const int CollapsedWidth = 18;
 
     private readonly List<Note> _allLoadedNotes = new();
     public ObservableCollection<Note> Notes { get; } = new();
@@ -60,8 +61,8 @@ public sealed partial class SideNotesWindow : Window
         // Ajustar al área de trabajo del monitor principal
         PositionToMonitorEdge();
 
-        // Timer de auto-ocultado al retirar el mouse (300ms de gracia)
-        _autoHideTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(300) };
+        // Timer de auto-ocultado al retirar el mouse (350ms de gracia)
+        _autoHideTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(350) };
         _autoHideTimer.Tick += (s, e) =>
         {
             _autoHideTimer.Stop();
@@ -98,6 +99,38 @@ public sealed partial class SideNotesWindow : Window
         PositionToMonitorEdge();
     }
 
+    private void UpdatePeekingPills()
+    {
+        PeekingPillsStack.Children.Clear();
+        ExpandedPillsStack.Children.Clear();
+
+        var displayNotes = _allLoadedNotes.Take(12);
+        foreach (var note in displayNotes)
+        {
+            var palette = ColorHelper.GetPalette(note.Color);
+
+            var pill1 = new Border
+            {
+                Width = 4,
+                Height = 18,
+                CornerRadius = new CornerRadius(2),
+                Background = palette.HeaderBrush,
+                Margin = new Thickness(0, 1, 0, 1)
+            };
+            PeekingPillsStack.Children.Add(pill1);
+
+            var pill2 = new Border
+            {
+                Width = 4,
+                Height = 18,
+                CornerRadius = new CornerRadius(2),
+                Background = palette.HeaderBrush,
+                Margin = new Thickness(0, 1, 0, 1)
+            };
+            ExpandedPillsStack.Children.Add(pill2);
+        }
+    }
+
     private async Task LoadNotesAsync()
     {
         var items = _isTrashMode 
@@ -107,6 +140,7 @@ public sealed partial class SideNotesWindow : Window
         _allLoadedNotes.Clear();
         _allLoadedNotes.AddRange(items);
 
+        UpdatePeekingPills();
         ApplyFilter(SearchBox?.Text);
     }
 
@@ -160,10 +194,10 @@ public sealed partial class SideNotesWindow : Window
                 ActiveNoteEditor.Document.SetText(TextSetOptions.None, selectedNote.Content ?? string.Empty);
             }
 
-            var palette = ColorHelper.GetPalette(selectedNote.Color);
-            ActiveNoteContainer.Background = palette.BodyBrush;
-            NoteHeaderBar.Background = palette.HeaderBrush;
-            TxtActiveNoteTitle.Foreground = palette.ForegroundBrush;
+            ApplyActiveNoteColor(selectedNote.Color);
+
+            // Estado de sincronización
+            IconActiveSync.Glyph = selectedNote.SyncStatus == SyncStatus.Synced ? "\uE753" : "\uE898";
 
             // En modo papelera el editor es de solo lectura
             ActiveNoteEditor.IsReadOnly = _isTrashMode;
@@ -171,9 +205,32 @@ public sealed partial class SideNotesWindow : Window
         }
     }
 
+    private void ApplyActiveNoteColor(NoteColor color)
+    {
+        var palette = ColorHelper.GetPalette(color);
+        ActiveNoteCard.Background = palette.BodyBrush;
+        ActiveNoteCard.BorderBrush = palette.BorderBrush;
+        NoteHeaderBar.Background = palette.HeaderBrush;
+        ActiveNoteFooter.BorderBrush = palette.BorderBrush;
+
+        TxtActiveNoteTitle.Foreground = palette.ForegroundBrush;
+        ActiveNoteEditor.Foreground = palette.ForegroundBrush;
+        TxtActiveAutoSave.Foreground = palette.ForegroundBrush;
+
+        IconActiveSync.Foreground = palette.ForegroundBrush;
+        IconActiveMore.Foreground = palette.ForegroundBrush;
+        IconActiveDelete.Foreground = palette.ForegroundBrush;
+
+        IconActiveBold.Foreground = palette.ForegroundBrush;
+        IconActiveItalic.Foreground = palette.ForegroundBrush;
+        IconActiveUnderline.Foreground = palette.ForegroundBrush;
+        IconActiveStrikethrough.Foreground = palette.ForegroundBrush;
+        IconActiveChecklist.Foreground = palette.ForegroundBrush;
+    }
+
     #region Auto-ocultado y Hover
 
-    private void PeekingHandle_PointerEntered(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    private void PeekingHandle_PointerEntered(object sender, PointerRoutedEventArgs e)
     {
         if (!_isExpanded)
         {
@@ -181,12 +238,20 @@ public sealed partial class SideNotesWindow : Window
         }
     }
 
-    private void ExpandedPanel_PointerEntered(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    private void PeekingHandle_PointerPressed(object sender, PointerRoutedEventArgs e)
+    {
+        if (!_isExpanded)
+        {
+            SetExpanded(true);
+        }
+    }
+
+    private void ExpandedPanel_PointerEntered(object sender, PointerRoutedEventArgs e)
     {
         _autoHideTimer.Stop();
     }
 
-    private void ExpandedPanel_PointerExited(object sender, Microsoft.UI.Xaml.Input.PointerRoutedEventArgs e)
+    private void ExpandedPanel_PointerExited(object sender, PointerRoutedEventArgs e)
     {
         if (!_isPinned)
         {
@@ -258,36 +323,6 @@ public sealed partial class SideNotesWindow : Window
     private async void BtnToggleTrash_Click(object sender, RoutedEventArgs e)
     {
         _isTrashMode = BtnToggleTrash.IsChecked ?? false;
-
-        TxtHeaderTitle.Text = _isTrashMode ? "Papelera de Reciclaje" : "Notas Rápidas";
-        BtnRestoreNote.Visibility = _isTrashMode ? Visibility.Visible : Visibility.Collapsed;
-        BtnEmptyTrash.Visibility = _isTrashMode ? Visibility.Visible : Visibility.Collapsed;
-        BtnNoteMenu.Visibility = _isTrashMode ? Visibility.Collapsed : Visibility.Visible;
-        FormatBar.Visibility = _isTrashMode ? Visibility.Collapsed : Visibility.Visible;
-
-        await LoadNotesAsync();
-    }
-
-    private async void BtnRestoreNote_Click(object sender, RoutedEventArgs e)
-    {
-        if (_currentNote == null) return;
-        await _repository.RestoreFromTrashAsync(_currentNote.Id);
-        _allLoadedNotes.Remove(_currentNote);
-        Notes.Remove(_currentNote);
-        _currentNote = Notes.FirstOrDefault();
-        if (_currentNote != null)
-        {
-            NotesTabList.SelectedItem = _currentNote;
-        }
-    }
-
-    private async void BtnEmptyTrash_Click(object sender, RoutedEventArgs e)
-    {
-        var trashNotes = await _repository.GetTrashNotesAsync();
-        foreach (var note in trashNotes)
-        {
-            await _repository.PermanentDeleteAsync(note.Id);
-        }
         await LoadNotesAsync();
     }
 
@@ -297,15 +332,21 @@ public sealed partial class SideNotesWindow : Window
 
     private async void SetColor_Click(object sender, RoutedEventArgs e)
     {
-        if (_currentNote != null && sender is MenuFlyoutItem item && Enum.TryParse<NoteColor>(item.Tag?.ToString(), out var color))
+        if (_currentNote != null && sender is FrameworkElement fe && Enum.TryParse<NoteColor>(fe.Tag?.ToString(), out var color))
         {
             _currentNote.Color = color;
-            var palette = ColorHelper.GetPalette(color);
-            ActiveNoteContainer.Background = palette.BodyBrush;
-            NoteHeaderBar.Background = palette.HeaderBrush;
-            TxtActiveNoteTitle.Foreground = palette.ForegroundBrush;
+            ApplyActiveNoteColor(color);
+            UpdatePeekingPills();
 
             await _repository.UpdateAsync(_currentNote);
+
+            // Refrescar lista para actualizar el bullet
+            var index = Notes.IndexOf(_currentNote);
+            if (index >= 0)
+            {
+                Notes[index] = _currentNote;
+                NotesTabList.SelectedIndex = index;
+            }
         }
     }
 
@@ -315,6 +356,8 @@ public sealed partial class SideNotesWindow : Window
         await _repository.SoftDeleteAsync(_currentNote.Id);
         _allLoadedNotes.Remove(_currentNote);
         Notes.Remove(_currentNote);
+        UpdatePeekingPills();
+
         _currentNote = Notes.FirstOrDefault();
         if (_currentNote != null)
         {
@@ -337,6 +380,7 @@ public sealed partial class SideNotesWindow : Window
         var created = await _repository.CreateAsync(duplicate);
         _allLoadedNotes.Insert(0, created);
         Notes.Insert(0, created);
+        UpdatePeekingPills();
         NotesTabList.SelectedIndex = 0;
     }
 
@@ -346,19 +390,12 @@ public sealed partial class SideNotesWindow : Window
         AppManager.Instance.OpenNoteAsFloating(_currentNote);
     }
 
-    private void BtnDetachAll_Click(object sender, RoutedEventArgs e)
-    {
-        AppManager.Instance.SwitchToFloatingMode();
-        this.Close();
-    }
-
     private async void BtnNewNote_Click(object sender, RoutedEventArgs e)
     {
         if (_isTrashMode)
         {
             BtnToggleTrash.IsChecked = false;
-            await Task.Run(() => { });
-            BtnToggleTrash_Click(BtnToggleTrash, new RoutedEventArgs());
+            _isTrashMode = false;
         }
 
         var newNote = new Note
@@ -371,6 +408,7 @@ public sealed partial class SideNotesWindow : Window
         var created = await _repository.CreateAsync(newNote);
         _allLoadedNotes.Insert(0, created);
         Notes.Insert(0, created);
+        UpdatePeekingPills();
         NotesTabList.SelectedIndex = 0;
     }
 
@@ -396,12 +434,6 @@ public sealed partial class SideNotesWindow : Window
         await ExportHelper.ExportNoteToMarkdownAsync(_currentNote, hWnd);
     }
 
-    private async void BtnExportAllJson_Click(object sender, RoutedEventArgs e)
-    {
-        var hWnd = WindowNative.GetWindowHandle(this);
-        await ExportHelper.ExportAllNotesToJsonAsync(_allLoadedNotes, hWnd);
-    }
-
     #endregion
 
     #region Formato Rápido
@@ -416,9 +448,11 @@ public sealed partial class SideNotesWindow : Window
         ActiveNoteEditor.Document.Selection.CharacterFormat.Underline =
             ActiveNoteEditor.Document.Selection.CharacterFormat.Underline == UnderlineType.None ? UnderlineType.Single : UnderlineType.None;
 
-    private void BtnBullets_Click(object sender, RoutedEventArgs e) =>
-        ActiveNoteEditor.Document.Selection.ParagraphFormat.ListType =
-            ActiveNoteEditor.Document.Selection.ParagraphFormat.ListType == MarkerType.Bullet ? MarkerType.None : MarkerType.Bullet;
+    private void BtnStrikethrough_Click(object sender, RoutedEventArgs e) =>
+        ActiveNoteEditor.Document.Selection.CharacterFormat.Strikethrough = FormatEffect.Toggle;
+
+    private void BtnChecklist_Click(object sender, RoutedEventArgs e) =>
+        ActiveNoteEditor.Document.Selection.TypeText("☑ ");
 
     #endregion
 }

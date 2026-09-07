@@ -71,4 +71,16 @@ public class Note
             return firstLine.Length > 0 ? (firstLine[0].Length > 30 ? firstLine[0][..30] + "..." : firstLine[0]) : "Nota sin título";
         }
     }
+
+    /// <summary>Color hexadecimal de la nota para plantillas e interfaces.</summary>
+    public string ColorHex => Color switch
+    {
+        NoteColor.Yellow => "#FFF385",
+        NoteColor.Green => "#D2F8B8",
+        NoteColor.Pink => "#FFCEE8",
+        NoteColor.Purple => "#E7DCFF",
+        NoteColor.Blue => "#CEECFE",
+        NoteColor.Gray => "#E9ECEF",
+        _ => "#FFF385"
+    };
 }

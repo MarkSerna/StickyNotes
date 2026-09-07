@@ -82,6 +82,9 @@ public sealed partial class NoteWindow : Window
     private void LoadNoteData()
     {
         TxtTitle.Text = _note.Title ?? string.Empty;
+        BtnPinTop.IsChecked = _note.IsAlwaysOnTop;
+        IconSync.Glyph = _note.SyncStatus == SyncStatus.Synced ? "\uE73E" : "\uE753";
+        ToolTipService.SetToolTip(BadgeSync, _note.SyncStatus == SyncStatus.Synced ? "Sincronizado con Google Drive" : "Guardado en SQLite (pendiente subir a Drive)");
 
         // Carga contenido enriquecido RTF si existe, de lo contrario texto plano
         if (!string.IsNullOrEmpty(_note.Content))
@@ -106,11 +109,23 @@ public sealed partial class NoteWindow : Window
         TxtTitle.Foreground = palette.ForegroundBrush;
         EditorBox.Foreground = palette.ForegroundBrush;
         EditorBox.Background = palette.BodyBrush;
-        TxtSyncStatus.Foreground = palette.ForegroundBrush;
+        TxtAutoSave.Foreground = palette.ForegroundBrush;
+        FooterBar.BorderBrush = palette.BorderBrush;
+
+        // Aplicar armonización cromática a iconos
+        IconNewNote.Foreground = palette.ForegroundBrush;
+        IconPinTop.Foreground = palette.ForegroundBrush;
+        IconSync.Foreground = palette.ForegroundBrush;
+        IconPalette.Foreground = palette.ForegroundBrush;
+        IconDelete.Foreground = palette.ForegroundBrush;
+        IconBold.Foreground = palette.ForegroundBrush;
+        IconItalic.Foreground = palette.ForegroundBrush;
+        IconUnderline.Foreground = palette.ForegroundBrush;
+        IconStrikethrough.Foreground = palette.ForegroundBrush;
+        IconChecklist.Foreground = palette.ForegroundBrush;
 
         try
         {
-            // Asegurar que el documento no mantenga fondos RTF heredados (elimina fondo de carácter)
             var sel = EditorBox.Document.Selection;
             sel.SetRange(0, 0);
             sel.Expand(TextRangeUnit.Story);
@@ -120,7 +135,7 @@ public sealed partial class NoteWindow : Window
         }
         catch
         {
-            // No crítico; si la limpieza falla, seguir sin bloquear la UI
+            // Omitir si el documento aún no está completamente renderizado
         }
     }
 
@@ -144,14 +159,13 @@ public sealed partial class NoteWindow : Window
 
         _note.Title = string.IsNullOrWhiteSpace(TxtTitle.Text) ? null : TxtTitle.Text.Trim();
 
-        // Extrae el contenido en formato RTF para preservar negrita, cursiva, etc.
         EditorBox.Document.GetText(TextGetOptions.FormatRtf, out var rtfContent);
         _note.Content = rtfContent;
 
-        TxtSyncStatus.Text = "Guardando...";
         await _repository.UpdateAsync(_note);
 
-        TxtSyncStatus.Text = _note.SyncStatus == SyncStatus.Synced ? "Sincronizado" : "Guardado local";
+        IconSync.Glyph = _note.SyncStatus == SyncStatus.Synced ? "\uE73E" : "\uE753";
+        ToolTipService.SetToolTip(BadgeSync, _note.SyncStatus == SyncStatus.Synced ? "Sincronizado con Google Drive" : "Guardado en SQLite (pendiente subir a Drive)");
     }
 
     private void AppWindow_Changed(AppWindow sender, AppWindowChangedEventArgs args)
@@ -198,12 +212,19 @@ public sealed partial class NoteWindow : Window
         selection.CharacterFormat.Strikethrough = FormatEffect.Toggle;
     }
 
-    private void BtnBullets_Click(object sender, RoutedEventArgs e)
+    private void BtnChecklist_Click(object sender, RoutedEventArgs e)
     {
         var selection = EditorBox.Document.Selection;
-        selection.ParagraphFormat.ListType = selection.ParagraphFormat.ListType == MarkerType.Bullet 
-            ? MarkerType.None 
-            : MarkerType.Bullet;
+        if (selection.Length == 0)
+        {
+            selection.Text = "☑ ";
+        }
+        else
+        {
+            selection.ParagraphFormat.ListType = selection.ParagraphFormat.ListType == MarkerType.Bullet 
+                ? MarkerType.None 
+                : MarkerType.Bullet;
+        }
     }
 
     #endregion
@@ -212,11 +233,16 @@ public sealed partial class NoteWindow : Window
 
     private async void ColorItem_Click(object sender, RoutedEventArgs e)
     {
-        if (sender is MenuFlyoutItem item && Enum.TryParse<NoteColor>(item.Tag?.ToString(), out var newColor))
+        string? tag = null;
+        if (sender is Button btn) tag = btn.Tag?.ToString();
+        else if (sender is MenuFlyoutItem item) tag = item.Tag?.ToString();
+
+        if (!string.IsNullOrEmpty(tag) && Enum.TryParse<NoteColor>(tag, out var newColor))
         {
             _note.Color = newColor;
             ApplyNoteColor(newColor);
             await _repository.UpdateAsync(_note);
+            BtnColorPicker.Flyout?.Hide();
         }
     }
 
