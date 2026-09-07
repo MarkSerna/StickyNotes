@@ -1,0 +1,6 @@
+{
+  "name": "Notas Rápidas Windows",
+  "description": "Aplicación de notas adhesivas para Windows 11/10 con sincronización en Google Drive, modo flotante y panel lateral.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
