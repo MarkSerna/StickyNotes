@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Collections.ObjectModel;
 using System.IO;
 using System.Linq;
+using System.Runtime.InteropServices;
 using System.Text.Json;
 using System.Threading.Tasks;
 using Microsoft.Extensions.DependencyInjection;
@@ -99,15 +100,22 @@ public sealed partial class SideNotesWindow : Window
         ApplyEdgeVisuals();
         PositionToMonitorEdge();
 
-        // Timer de auto-ocultado al retirar el mouse (350ms de gracia)
-        _autoHideTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(350) };
+        // Timer de auto-ocultado al retirar el mouse (500ms de gracia con verificación física)
+        _autoHideTimer = new DispatcherTimer { Interval = TimeSpan.FromMilliseconds(500) };
         _autoHideTimer.Tick += (s, e) =>
         {
             _autoHideTimer.Stop();
-            if (!_isPinned && _isExpanded && !_isDraggingHandle)
-            {
-                SetExpanded(false);
-            }
+            if (_isPinned || !_isExpanded || _isDraggingHandle) return;
+
+            // No cerrar si el cursor físico sigue dentro del área de la ventana
+            if (IsCursorOverWindow()) return;
+
+            // No cerrar si la ventana tiene el foco activo (ej. escribiendo o editando)
+            var activeHWnd = GetForegroundWindow();
+            var myHWnd = WindowNative.GetWindowHandle(this);
+            if (activeHWnd == myHWnd && activeHWnd != IntPtr.Zero) return;
+
+            SetExpanded(false);
         };
 
         // Cargar notas desde SQLite
@@ -508,15 +516,44 @@ public sealed partial class SideNotesWindow : Window
         }
     }
 
+    [DllImport("user32.dll")]
+    private static extern IntPtr GetForegroundWindow();
+
+    private bool IsCursorOverWindow()
+    {
+        try
+        {
+            var (cursorX, cursorY) = MonitorHelper.GetCursorPosition();
+            var pos = _appWindow.Position;
+            var size = _appWindow.Size;
+
+            return cursorX >= (pos.X - 6) && cursorX <= (pos.X + size.Width + 6) &&
+                   cursorY >= (pos.Y - 6) && cursorY <= (pos.Y + size.Height + 6);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
     private void ExpandedPanel_PointerEntered(object sender, PointerRoutedEventArgs e)
     {
         _autoHideTimer.Stop();
     }
 
+    private void ExpandedPanel_PointerMoved(object sender, PointerRoutedEventArgs e)
+    {
+        if (_autoHideTimer.IsEnabled)
+        {
+            _autoHideTimer.Stop();
+        }
+    }
+
     private void ExpandedPanel_PointerExited(object sender, PointerRoutedEventArgs e)
     {
-        if (!_isPinned && !_isDraggingHandle)
+        if (!_isPinned && !_isDraggingHandle && !IsCursorOverWindow())
         {
+            _autoHideTimer.Stop();
             _autoHideTimer.Start();
         }
     }

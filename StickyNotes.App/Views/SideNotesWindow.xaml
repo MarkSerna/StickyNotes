@@ -40,6 +40,7 @@
               BorderThickness="1,0,0,0"
               BorderBrush="#1E293B"
               PointerEntered="ExpandedPanel_PointerEntered"
+              PointerMoved="ExpandedPanel_PointerMoved"
               PointerExited="ExpandedPanel_PointerExited">
             <Grid.RenderTransform>
                 <TranslateTransform x:Name="PanelTransform" X="0"/>
@@ -70,15 +71,19 @@
             <!-- COLUMNA PRINCIPAL: LISTA DE NOTAS APILADAS EN EL CAJÓN -->
             <ScrollViewer x:Name="NotesScrollViewer"
                           Grid.Column="1"
+                          Background="Transparent"
+                          PointerMoved="ExpandedPanel_PointerMoved"
                           VerticalScrollBarVisibility="Auto"
                           HorizontalScrollBarVisibility="Disabled">
                 <StackPanel x:Name="NotesCardsStack"
+                            Background="Transparent"
+                            PointerMoved="ExpandedPanel_PointerMoved"
                             Spacing="12"
                             Margin="10,14,8,14"/>
             </ScrollViewer>
 
             <!-- COLUMNA: LISTA DE PESTAÑAS 'NOTAS' (Imagen 3) -->
-            <Grid x:Name="NotesSidebarContainer" Grid.Column="2" Background="#020617" BorderThickness="1,0,0,0" BorderBrush="#1E293B">
+            <Grid x:Name="NotesSidebarContainer" Grid.Column="2" Background="#020617" BorderThickness="1,0,0,0" BorderBrush="#1E293B" PointerMoved="ExpandedPanel_PointerMoved">
                 <Grid.RowDefinitions>
                     <!-- Cabecera de la columna 'NOTAS' -->
                     <RowDefinition Height="36"/>
