@@ -41,6 +41,12 @@ public sealed partial class NoteWindow : Window
         _appWindow = AppWindow.GetFromWindowId(windowId);
         _presenter = (_appWindow.Presenter as OverlappedPresenter)!;
 
+        var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico");
+        if (File.Exists(iconPath))
+        {
+            _appWindow.SetIcon(iconPath);
+        }
+
         // Quitar la barra de título estándar de Windows para look idéntico a Notas Rápidas
         _appWindow.TitleBar.ExtendsContentIntoTitleBar = true;
         _appWindow.TitleBar.ButtonBackgroundColor = Colors.Transparent;

@@ -82,6 +82,12 @@ public sealed partial class SideNotesWindow : Window
         _presenter.IsResizable = false;
         _presenter.SetBorderAndTitleBar(false, false);
 
+        var iconPath = Path.Combine(AppContext.BaseDirectory, "Assets", "AppIcon.ico");
+        if (File.Exists(iconPath))
+        {
+            _appWindow.SetIcon(iconPath);
+        }
+
         // Cargar configuración de posición previa guardada
         LoadWidgetConfig();
 
