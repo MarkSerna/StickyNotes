@@ -65,6 +65,44 @@ public class GoogleDriveSyncService
     }
 
     /// <summary>
+    /// Comprueba si ya existen credenciales OAuth 2.0 guardadas en el almacén seguro de Windows DPAPI.
+    /// </summary>
+    public async Task<bool> HasSavedCredentialsAsync()
+    {
+        try
+        {
+            var dataStore = new WindowsCredentialDataStore("StickyNotesApp");
+            var token = await dataStore.GetAsync<Google.Apis.Auth.OAuth2.Responses.TokenResponse>("user");
+            return token != null;
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Intenta inicializar la conexión con Google Drive únicamente si ya existen credenciales guardadas,
+    /// evitando abrir el navegador de forma intrusiva en sincronizaciones automáticas de fondo.
+    /// </summary>
+    public async Task<bool> TryInitializeFromSavedCredentialsAsync(CancellationToken cancellationToken = default)
+    {
+        if (_driveService != null) return true;
+        if (string.IsNullOrWhiteSpace(_clientId) || string.IsNullOrWhiteSpace(_clientSecret) || _clientId.Contains("TU_CLIENT_ID"))
+        {
+            return false;
+        }
+
+        var hasToken = await HasSavedCredentialsAsync();
+        if (!hasToken)
+        {
+            return false;
+        }
+
+        return await AuthenticateAsync(cancellationToken);
+    }
+
+    /// <summary>
     /// Inicia el flujo OAuth 2.0 InstalledAppFlow y persiste tokens cifrados en DPAPI.
     /// Solo solicita acceso a drive.appdata (carpeta oculta sin acceso a archivos personales).
     /// </summary>
@@ -118,7 +156,7 @@ public class GoogleDriveSyncService
     {
         if (_driveService == null)
         {
-            var ok = await AuthenticateAsync(cancellationToken);
+            var ok = await TryInitializeFromSavedCredentialsAsync(cancellationToken);
             if (!ok || _driveService == null)
             {
                 return new SyncReport(0, 0, 0, false, "Usuario no autenticado en Google Drive.");

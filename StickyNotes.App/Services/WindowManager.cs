@@ -39,6 +39,7 @@ public class WindowManager
         {
             _trayIconService = new TrayIconService(
                 _syncScheduler,
+                dispatcherQueue,
                 onNewNoteRequested: () => dispatcherQueue.TryEnqueue(() => _ = CreateAndOpenNewNoteFloatingAsync()),
                 onToggleSidePanelRequested: () => dispatcherQueue.TryEnqueue(ToggleSideNotes),
                 onShowAllFloatingRequested: () => dispatcherQueue.TryEnqueue(() => _ = ShowAllFloatingNotesAsync()),

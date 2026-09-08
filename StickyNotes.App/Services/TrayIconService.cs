@@ -1,6 +1,7 @@
 using System;
 using System.Threading.Tasks;
 using H.NotifyIcon;
+using Microsoft.UI.Dispatching;
 using Microsoft.UI.Xaml;
 using Microsoft.UI.Xaml.Controls;
 using Microsoft.UI.Xaml.Media.Imaging;
@@ -12,6 +13,7 @@ public class TrayIconService : IDisposable
 {
     private TaskbarIcon? _trayIcon;
     private readonly SyncScheduler _syncScheduler;
+    private readonly DispatcherQueue _dispatcherQueue;
     private readonly Action _onNewNoteRequested;
     private readonly Action _onToggleSidePanelRequested;
     private readonly Action _onShowAllFloatingRequested;
@@ -19,12 +21,14 @@ public class TrayIconService : IDisposable
 
     public TrayIconService(
         SyncScheduler syncScheduler,
+        DispatcherQueue dispatcherQueue,
         Action onNewNoteRequested,
         Action onToggleSidePanelRequested,
         Action onShowAllFloatingRequested,
         Action? onOpenSettingsRequested = null)
     {
         _syncScheduler = syncScheduler;
+        _dispatcherQueue = dispatcherQueue;
         _onNewNoteRequested = onNewNoteRequested;
         _onToggleSidePanelRequested = onToggleSidePanelRequested;
         _onShowAllFloatingRequested = onShowAllFloatingRequested;
@@ -83,7 +87,7 @@ public class TrayIconService : IDisposable
         var itemSync = new MenuFlyoutItem { Text = "Sincronizar ahora con Google Drive" };
         itemSync.Click += async (s, e) =>
         {
-            _trayIcon.ShowNotification("Notas Rápidas", "Sincronizando notas con Google Drive...");
+            ShowNotificationSafe("Notas Rápidas", "Sincronizando notas con Google Drive...");
             await _syncScheduler.RequestImmediateSyncAsync();
         };
         menu.Items.Add(itemSync);
@@ -118,22 +122,63 @@ public class TrayIconService : IDisposable
 
         _trayIcon.ContextFlyout = menu;
 
+        // Registrar explícitamente el icono en el System Tray de Windows (imprescindible cuando se crea por código fuera de XAML)
+        try
+        {
+            _trayIcon.ForceCreate();
+        }
+        catch (Exception ex)
+        {
+            System.Diagnostics.Debug.WriteLine($"[TrayIcon] Advertencia al forzar creación en la bandeja: {ex.Message}");
+        }
+
         // Escuchar reportes de sincronización para mostrar notificaciones tipo Toast
         _syncScheduler.SyncCompleted += OnSyncCompleted;
     }
 
+    public void ShowNotificationSafe(string title, string message)
+    {
+        _dispatcherQueue.TryEnqueue(() =>
+        {
+            try
+            {
+                if (_trayIcon == null) return;
+
+                if (!_trayIcon.IsCreated)
+                {
+                    _trayIcon.ForceCreate();
+                }
+
+                if (_trayIcon.IsCreated)
+                {
+                    _trayIcon.ShowNotification(title, message);
+                }
+            }
+            catch (Exception ex)
+            {
+                System.Diagnostics.Debug.WriteLine($"[TrayIcon] Error al mostrar notificación: {ex.Message}");
+            }
+        });
+    }
+
     private void OnSyncCompleted(SyncReport report)
     {
-        if (_trayIcon == null) return;
-
         if (report.IsSuccess && (report.Uploaded > 0 || report.Downloaded > 0 || report.Deleted > 0))
         {
             var msg = $"Sincronización completa: {report.Uploaded} subidas, {report.Downloaded} descargadas.";
-            _trayIcon.ShowNotification("Google Drive Sync", msg);
+            ShowNotificationSafe("Google Drive Sync", msg);
         }
         else if (!report.IsSuccess && !string.IsNullOrEmpty(report.ErrorMessage))
         {
-            _trayIcon.ShowNotification("Error de Sincronización", report.ErrorMessage);
+            // Evitar spam de notificaciones toast si el usuario todavía no ha completado el inicio de sesión OAuth en el navegador
+            if (report.ErrorMessage.Contains("no autenticado", StringComparison.OrdinalIgnoreCase) ||
+                report.ErrorMessage.Contains("unauthenticated", StringComparison.OrdinalIgnoreCase))
+            {
+                System.Diagnostics.Debug.WriteLine($"[Sync] Estado de sincronización: {report.ErrorMessage}");
+                return;
+            }
+
+            ShowNotificationSafe("Error de Sincronización", report.ErrorMessage);
         }
     }
 
